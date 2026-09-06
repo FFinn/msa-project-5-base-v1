@@ -1,0 +1,19 @@
+@startuml Task2_C4_Context_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Task 2 — C4 System Context To Be: B2B price-list export
+
+Person(b2b, "B2B-клиент", "Получает ежедневный кастомный прайс-лист")
+
+System(shop, "Онлайн-магазин", "Хранит товары, категории, клиентов и индивидуальные цены; ежедневно формирует прайс-листы")
+System_Ext(storage, "Объектное хранилище", "Хранит сформированные CSV/XLS-файлы")
+System_Ext(k8s, "Kubernetes platform", "По расписанию 06:00 запускает контейнеризированную задачу экспорта")
+
+Rel(k8s, shop, "Запускает ежедневный экспорт")
+Rel(shop, storage, "Публикует CSV/XLS прайс-листы")
+Rel(b2b, storage, "Получает/скачивает свой прайс-лист")
+
+SHOW_LEGEND()
+@enduml
