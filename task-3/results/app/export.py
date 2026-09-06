@@ -4,6 +4,7 @@ import csv
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import psycopg2
 
@@ -19,7 +20,8 @@ def main() -> None:
     output_dir = Path(os.getenv("OUTPUT_DIR", "/output"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    run_date = os.getenv("RUN_DATE") or datetime.now(timezone.utc).date().isoformat()
+    business_tz = ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Europe/Moscow"))
+    run_date = os.getenv("RUN_DATE") or datetime.now(business_tz).date().isoformat()
     final_path = output_dir / f"shipments-{run_date}.csv"
     temp_path = output_dir / f".{final_path.name}.tmp"
 
@@ -64,6 +66,7 @@ def main() -> None:
             {
                 "event": "shipment_export_completed",
                 "status": "success",
+                "run_date": run_date,
                 "rows_exported": rows_exported,
                 "file": str(final_path),
                 "duration_ms": duration_ms,
