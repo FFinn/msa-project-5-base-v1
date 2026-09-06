@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: shipments-daily-export
+spec:
+  schedule: "0 20 * * *"
+  timeZone: "Europe/Moscow"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: shipments-daily-export
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: exporter
+              image: shipments-exporter:local
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: DB_HOST
+                  value: shipments-db
+                - name: DB_PORT
+                  value: "5432"
+                - name: DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: shipments-db-secret
+                      key: POSTGRES_DB
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: shipments-db-secret
+                      key: POSTGRES_USER
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: shipments-db-secret
+                      key: POSTGRES_PASSWORD
+                - name: OUTPUT_DIR
+                  value: /output
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: output
+                  mountPath: /output
+          volumes:
+            - name: output
+              persistentVolumeClaim:
+                claimName: shipments-export-output
