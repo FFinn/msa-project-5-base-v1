@@ -8,11 +8,19 @@
 docker compose up -d
 ```
 
-Airflow standalone создаст локальную Metadata DB и пользователя администратора. Пароль можно увидеть в логах:
+Airflow standalone создаст локальную Metadata DB и пользователя администратора. Дождитесь запуска:
 
 ```bash
-docker compose logs airflow | grep -i password
+docker compose logs -f airflow
 ```
+
+Пароль администратора можно получить так:
+
+```bash
+docker compose exec airflow cat /opt/airflow/standalone_admin_password.txt
+```
+
+Если файл ещё не появился, подождите завершения инициализации Airflow.
 
 Открыть:
 
@@ -55,7 +63,7 @@ DAG: `marketing_batch_poc`.
 - `retry_exponential_backoff=True`;
 - `max_retry_delay=2m`.
 
-После исчерпания retry задача станет `failed`, а `failure_email`, работающий по `TriggerRule.ONE_FAILED`, отправит письмо в MailHog.
+После исчерпания retry `read_source` станет `failed`, downstream-ветка не выполнится, `join` получит upstream failure, а `failure_email` с `TriggerRule.ONE_FAILED` отправит письмо в MailHog.
 
 ## Что снять для сдачи
 
