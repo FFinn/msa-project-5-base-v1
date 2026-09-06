@@ -110,5 +110,5 @@ with DAG(
         retries=0,
     )
 
-    read >> branch >> [high_value, regular] >> join >> success_email
-    [read, branch, high_value, regular] >> failure_email
+    read >> branch >> [high_value, regular] >> join
+    join >> [success_email, failure_email]
