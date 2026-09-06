@@ -1,0 +1,64 @@
+@startuml Task5_C4_Observability
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Task 5 — TradeWare To Be: monitoring, logging, alerting and tracing
+
+Person(employee, "Сотрудник склада", "Работает с ERP")
+Person(oncall, "DevOps / On-call", "Получает алерты и расследует инциденты")
+
+System_Boundary(apps, "TradeWare application platform / GCP") {
+    Container(frontend, "ERP Frontend", "Angular", "UI")
+    Container(intake, "Report Intake Service", "Spring Boot + Micrometer + OTel", "Приём файлов и status API")
+    Container(queue, "Processing Queue", "Pub/Sub / Kafka", "Буферизация загрузок")
+    Container(batch, "Report Batch Worker", "Spring Batch + Micrometer + OTel", "Chunk ETL")
+    ContainerDb(db, "PostgreSQL", "Cloud SQL", "Номенклатура, справочники, batch/status metadata")
+    Container(gcs, "GCS", "Object Storage", "Raw CSV и error reports")
+}
+
+System_Boundary(obs, "Observability platform") {
+    Container(prometheus, "Prometheus", "Metrics TSDB", "Scrape, PromQL, alert rule evaluation")
+    Container(grafana, "Grafana", "Visualization", "Dashboards и exploratory metrics")
+    Container(alertmanager, "Alertmanager", "Alert routing", "Grouping, inhibition, routing, resolved notifications")
+    Container(filebeat, "Filebeat", "Log agent", "Собирает container/application logs")
+    Container(logstash, "Logstash", "Log pipeline", "Parse, normalize, enrich")
+    ContainerDb(elastic, "Elasticsearch", "Search / document store", "Индексы логов + ILM")
+    Container(kibana, "Kibana", "Log analytics", "Discover и dashboards")
+    Container(otel, "OpenTelemetry Collector", "Telemetry pipeline", "Receives/processes/exports traces")
+    Container(jaeger, "Jaeger", "Distributed tracing", "Хранение/поиск/визуализация traces")
+}
+
+System_Ext(notifications, "Incident channels", "Telegram / Slack / Email / PagerDuty")
+
+Rel(employee, frontend, "Использует")
+Rel(frontend, intake, "REST/WebSocket")
+Rel(intake, queue, "ReportUploaded")
+Rel(batch, queue, "Consume/process status")
+Rel(intake, gcs, "Raw CSV")
+Rel(batch, gcs, "Read/write error report")
+Rel(batch, db, "Batch read/write + metadata", "JDBC")
+
+Rel(prometheus, intake, "Scrapes /actuator/prometheus", "HTTP pull")
+Rel(prometheus, batch, "Scrapes /actuator/prometheus", "HTTP pull")
+Rel(prometheus, queue, "Collects queue metrics/exporter")
+Rel(prometheus, db, "Collects DB metrics/exporter")
+Rel(grafana, prometheus, "PromQL queries")
+Rel(prometheus, alertmanager, "Sends firing/resolved alerts")
+Rel(alertmanager, notifications, "Routes notifications")
+Rel(oncall, grafana, "Investigates metrics")
+
+Rel(intake, filebeat, "JSON stdout logs")
+Rel(batch, filebeat, "JSON stdout logs")
+Rel(filebeat, logstash, "Ships logs")
+Rel(logstash, elastic, "Indexes normalized events")
+Rel(kibana, elastic, "Search/aggregate")
+Rel(oncall, kibana, "Investigates by file_id/trace_id")
+
+Rel(intake, otel, "OTLP traces/context")
+Rel(batch, otel, "OTLP traces/context")
+Rel(otel, jaeger, "Exports spans")
+Rel(oncall, jaeger, "Finds slow/error spans")
+
+SHOW_LEGEND()
+@enduml
