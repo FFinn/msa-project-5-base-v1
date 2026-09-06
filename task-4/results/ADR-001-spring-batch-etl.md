@@ -38,15 +38,18 @@
 
 1. Сотрудник загружает CSV через существующий UI.
 2. Intake API выполняет только быструю синхронную проверку формата/размера и сохраняет исходный файл в GCS.
-3. Для файла создаётся уникальный `file_id`/`job_id`; повторная регистрация того же файла не создаёт параллельную копию обработки.
-4. Intake API публикует команду `ReportUploaded` в очередь (в GCP — Pub/Sub; допустим Kafka при наличии корпоративного брокера) и немедленно возвращает пользователю статус **Accepted/Processing**, не удерживая HTTP-запрос до конца ETL.
-5. Spring Batch Worker получает job и запускает Spring Batch `Job`.
+3. Для файла создаётся уникальный `file_id`; в отдельном **Import Status Store** создаётся бизнес-статус `ACCEPTED`. Повторная регистрация того же файла/идемпотентного ключа не создаёт параллельную копию обработки.
+4. Intake API публикует команду `ReportUploaded(file_id, object_uri)` в очередь (в GCP — Pub/Sub; допустим Kafka при наличии корпоративного брокера) и немедленно возвращает пользователю `202 Accepted` + `file_id`, не удерживая HTTP-запрос до конца ETL.
+5. Spring Batch Worker получает job, переводит бизнес-статус в `PROCESSING` и запускает Spring Batch `Job`.
 6. Job обрабатывает CSV chunk-ами:
    - `ItemReader` — потоково читает CSV из GCS/локального временного файла;
    - `ItemProcessor` — полная валидация, нормализация и обогащение справочными данными;
    - `ItemWriter` — batch insert/upsert в PostgreSQL, а не по одной строке.
-7. Spring Batch хранит `JobExecution`, `StepExecution` и checkpoint в **JobRepository (PostgreSQL)**.
-8. После завершения публикуется событие `ReportProcessed`/`ReportFailed`; UI получает статус через существующий WebSocket/status API.
+7. Spring Batch хранит **техническое состояние** `JobExecution`, `StepExecution` и checkpoints в **JobRepository (PostgreSQL)**.
+8. После завершения Batch Worker обновляет бизнес-статус в `COMPLETED` или `FAILED`, сохраняет ссылку на validation/error report при необходимости и публикует `ReportProcessed`/`ReportFailed`.
+9. UI получает бизнес-статус через status API/WebSocket. Внутренние таблицы JobRepository напрямую в UI не экспонируются.
+
+Разделение важно: **JobRepository — техническое хранилище Spring Batch, Import Status Store — бизнесовая модель статуса для пользователя и интеграций.**
 
 ### 3.2. Chunk size
 
@@ -83,19 +86,21 @@
 - временные ошибки БД/сети — `retry` с ограничением и backoff;
 - ошибки конкретной строки могут использовать `skip` только для заранее согласованных типов ошибок и с лимитом; бизнес-критичные ошибки должны завершать job;
 - writer должен быть идемпотентным: upsert/unique business key + `file_id`/version;
-- повторный job с теми же параметрами не должен создавать дубликаты.
+- повторный job с теми же параметрами не должен создавать дубликаты;
+- бизнес-статус изменяется идемпотентно по `file_id` и не используется вместо транзакционных checkpoints Spring Batch.
 
 ## 4. Хранение данных
 
 | Данные | Хранилище | Причина |
 |---|---|---|
 | Исходные CSV | GCS | дешёвое и масштабируемое object storage, аудит исходного файла |
+| Бизнес-статус импорта | PostgreSQL / Cloud SQL (`Import Status Store`) | status API, `file_id`, пользовательские состояния и ссылки на результаты |
 | Справочные данные | существующая PostgreSQL / read replica при необходимости | источник обогащения |
 | Номенклатура/остатки | PostgreSQL | транзакционные актуальные данные |
 | Spring Batch metadata | отдельная PostgreSQL БД/схема JobRepository | restartability, состояние Job/Step |
 | Ошибочные строки/validation report | GCS или отдельная таблица | повторный анализ без засорения JobRepository |
 
-JobRepository является критической зависимостью и в production должен работать на отказоустойчивом PostgreSQL/Cloud SQL с backup/HA.
+JobRepository является критической зависимостью и в production должен работать на отказоустойчивом PostgreSQL/Cloud SQL с backup/HA. Бизнесовый статус не следует получать напрямую из внутренних таблиц Spring Batch.
 
 ## 5. Развёртывание
 
@@ -104,7 +109,7 @@ JobRepository является критической зависимостью �
 - `report-intake-service` — stateless API;
 - `report-batch-worker` — Spring Boot + Spring Batch;
 - Pub/Sub/Kafka — буферизация и распределение job;
-- Cloud SQL PostgreSQL — business DB и отдельная metadata DB/schema;
+- Cloud SQL PostgreSQL — business DB/status store и отдельная metadata DB/schema JobRepository;
 - GCS — raw/error files;
 - HPA/KEDA или аналог — масштабирование workers по CPU и/или длине очереди;
 - Secret Manager/Kubernetes Secret — credentials;
@@ -172,6 +177,7 @@ Spring Batch не обязан постоянно работать как оди
 
 - появляется очередь и eventual consistency: пользователь получает результат асинхронно;
 - JobRepository становится критической инфраструктурой;
+- появляется отдельная бизнес-модель статусов, которую нужно согласованно обновлять при сбоях;
 - неверная concurrency может всё равно перегрузить PostgreSQL;
 - слишком большой chunk способен увеличить memory/locks/recovery time;
 - идемпотентность writer и повторных запусков должна быть спроектирована явно;
@@ -184,6 +190,7 @@ Spring Batch не обязан постоянно работать как оди
 3. Нет построчного commit на каждую запись.
 4. При падении worker job восстанавливается из JobRepository без дублирования уже применённых данных.
 5. Есть ограничение максимальной concurrency и DB connections.
-6. Метрики, логи, traces и alert rules проверены искусственными сбоями.
+6. `file_id` имеет корректный бизнес-статус после retry/restart/ошибки.
+7. Метрики, логи, traces и alert rules проверены искусственными сбоями.
 
-Исходник To Be диаграммы: `c4-to-be.puml`.
+Исходники To Be диаграммы: `c4-to-be.puml` и `c4-to-be.drawio`.
