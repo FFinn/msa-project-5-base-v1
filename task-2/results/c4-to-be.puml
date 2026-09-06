@@ -1,0 +1,22 @@
+@startuml Task2_C4_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Task 2 — To Be: ежедневная выгрузка B2B-прайс-листов
+
+Person(b2b, "B2B-клиент", "Получает сформированный прайс-лист")
+
+System_Boundary(shop, "Онлайн-магазин / Kubernetes cluster") {
+    ContainerDb(priceDb, "БД прайс-листов", "PostgreSQL", "products, categories, clients, client_prices")
+    Container(exporter, "Price List Exporter", "Kubernetes CronJob → Job → Pod", "Ежедневно в 06:00 формирует CSV/XLS-прайс-листы")
+}
+
+System_Ext(objectStorage, "Объектное хранилище", "GCS/S3-compatible", "Хранит сформированные файлы")
+
+Rel(exporter, priceDb, "Читает данные одним SQL/JOIN", "PostgreSQL, read-only")
+Rel(exporter, objectStorage, "Записывает сформированный файл", "CSV/XLS")
+Rel(b2b, objectStorage, "Получает/скачивает прайс-лист")
+
+SHOW_LEGEND()
+@enduml
