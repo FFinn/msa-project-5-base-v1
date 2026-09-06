@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+__pycache__/
+*.py[cod]
+*.log
+
+# Local runtime artifacts
+airflow.db
+standalone_admin_password.txt
+logs/
+output/
+
+# IDE
+.idea/
+.vscode/
