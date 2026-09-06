@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shipments-output-reader
+spec:
+  restartPolicy: Never
+  containers:
+    - name: reader
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo "Files on PVC:"
+          ls -la /output
+          echo "CSV content:"
+          cat /output/shipments-*.csv
+          sleep 3600
+      volumeMounts:
+        - name: output
+          mountPath: /output
+  volumes:
+    - name: output
+      persistentVolumeClaim:
+        claimName: shipments-export-output
