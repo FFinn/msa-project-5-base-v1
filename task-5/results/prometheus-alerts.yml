@@ -11,7 +11,7 @@ groups:
         annotations:
           summary: "Spring Batch job failed"
           description: "At least one batch job failed after retries during the last 5 minutes."
-          runbook: "docs/runbooks/batch-job-failed.md"
+          runbook: "task-5/results/RUNBOOKS.md#batch-job-failed"
 
       - alert: TradeWareBatchAverageDurationHigh
         expr: |
@@ -27,7 +27,7 @@ groups:
         annotations:
           summary: "Average batch processing time is above 30 seconds"
           description: "The 10-minute rolling average job duration has been above the business target for 5 minutes."
-          runbook: "docs/runbooks/batch-sla.md"
+          runbook: "task-5/results/RUNBOOKS.md#batch-sla"
 
       - alert: TradeWareQueueAgeHigh
         expr: tradeware_queue_oldest_message_age_seconds > 60
@@ -39,7 +39,7 @@ groups:
         annotations:
           summary: "Oldest report has been waiting in queue for too long"
           description: "Oldest message age is {{ $value }} seconds. Threshold must be tuned after load tests."
-          runbook: "docs/runbooks/queue-backlog.md"
+          runbook: "task-5/results/RUNBOOKS.md#queue-backlog"
 
       - alert: TradeWareQueueDepthGrowing
         expr: deriv(tradeware_queue_depth[10m]) > 0
@@ -51,7 +51,7 @@ groups:
         annotations:
           summary: "Report processing backlog is continuously growing"
           description: "Queue depth has had a positive trend for 10 minutes."
-          runbook: "docs/runbooks/queue-backlog.md"
+          runbook: "task-5/results/RUNBOOKS.md#queue-backlog"
 
       - alert: TradeWareDbPoolSaturationHigh
         expr: tradeware_db_pool_active_connections / tradeware_db_pool_max_connections > 0.8
@@ -63,7 +63,7 @@ groups:
         annotations:
           summary: "Database connection pool saturation above 80%"
           description: "Worker concurrency may be too high or DB queries may be slow."
-          runbook: "docs/runbooks/db-saturation.md"
+          runbook: "task-5/results/RUNBOOKS.md#db-saturation"
 
       - alert: TradeWareHighSkipRate
         expr: |
@@ -79,7 +79,7 @@ groups:
         annotations:
           summary: "Skipped rows exceed 1%"
           description: "Potential input-data-quality regression. Threshold must be approved by business/data owner."
-          runbook: "docs/runbooks/data-quality.md"
+          runbook: "task-5/results/RUNBOOKS.md#data-quality--high-skip-rate"
 
   - name: tradeware-api
     rules:
@@ -93,7 +93,7 @@ groups:
         annotations:
           summary: "Report Intake API is unavailable"
           description: "Prometheus has been unable to scrape the Intake API for more than one minute."
-          runbook: "docs/runbooks/intake-down.md"
+          runbook: "task-5/results/RUNBOOKS.md#intake-api-down"
 
       - alert: TradeWareIntakeHigh5xxRate
         expr: |
@@ -109,4 +109,4 @@ groups:
         annotations:
           summary: "Report Intake API 5xx rate above 5%"
           description: "Server error ratio has been above 5% for 5 minutes."
-          runbook: "docs/runbooks/intake-errors.md"
+          runbook: "task-5/results/RUNBOOKS.md#intake-api-high-5xx-rate"
