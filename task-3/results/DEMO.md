@@ -22,6 +22,13 @@ docker build -t shipments-exporter:local ./app
 docker images | grep shipments-exporter
 ```
 
+Если выбранный драйвер MiniKube не использует Docker daemon напрямую, альтернативный вариант:
+
+```bash
+docker build -t shipments-exporter:local ./app
+minikube image load shipments-exporter:local
+```
+
 ## 3. Поднять тестовую PostgreSQL и PVC
 
 ```bash
@@ -54,34 +61,18 @@ kubectl wait --for=condition=complete job/shipments-export-manual-1 --timeout=12
 kubectl logs job/shipments-export-manual-1
 ```
 
-В логе должен быть `shipment_export_completed`, `status=success` и `rows_exported=3`.
+В логе должен быть JSON с `event=shipment_export_completed`, `status=success` и `rows_exported=3`.
 
 ## 6. Проверить CSV на PVC
 
-Создать временный pod для чтения PVC:
-
 ```bash
-kubectl run output-reader \
-  --image=busybox:1.36 \
-  --restart=Never \
-  --overrides='{
-    "spec": {
-      "containers": [{
-        "name": "output-reader",
-        "image": "busybox:1.36",
-        "command": ["sh", "-c", "ls -la /output && cat /output/shipments-*.csv && sleep 3600"],
-        "volumeMounts": [{"name": "output", "mountPath": "/output"}]
-      }],
-      "volumes": [{
-        "name": "output",
-        "persistentVolumeClaim": {"claimName": "shipments-export-output"}
-      }]
-    }
-  }'
-
-kubectl logs output-reader
-kubectl delete pod output-reader
+kubectl apply -f k8s/output-reader.yaml
+kubectl wait --for=condition=Ready pod/shipments-output-reader --timeout=60s
+kubectl logs shipments-output-reader
+kubectl delete pod shipments-output-reader
 ```
+
+В выводе должны быть имя `shipments-YYYY-MM-DD.csv`, заголовок CSV и три тестовые строки.
 
 ## 7. Проверить защиту от параллельного запуска
 
@@ -91,7 +82,7 @@ kubectl delete pod output-reader
 concurrencyPolicy: Forbid
 ```
 
-Это означает, что плановый запуск CronJob не создаст новый Job, пока предыдущий запуск этого CronJob ещё выполняется.
+Это означает, что **плановый запуск самого CronJob** не создаст новый Job, пока предыдущий запуск этого CronJob ещё выполняется. Ручные Job, созданные командой `kubectl create job --from=cronjob/...`, Kubernetes рассматривает отдельно; `concurrencyPolicy` не является глобальной блокировкой любых вручную созданных Job.
 
 ## Скриншоты для сдачи
 
@@ -99,7 +90,7 @@ concurrencyPolicy: Forbid
 
 1. `01-cronjob.png` — `kubectl get cronjob shipments-daily-export`.
 2. `02-job-completed.png` — `kubectl get jobs,pods` с `Complete/Completed`.
-3. `03-job-log.png` — лог с `rows_exported`.
+3. `03-job-log.png` — JSON-лог с `rows_exported`.
 4. `04-csv.png` — содержимое сформированного CSV на PVC.
 
 Скриншоты должны подтверждать реальный запуск в MiniKube.
