@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -63,18 +65,34 @@ def main() -> None:
         os.replace(temp_path, final_path)
         duration_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
         print(
-            {
-                "event": "shipment_export_completed",
-                "status": "success",
-                "run_date": run_date,
-                "rows_exported": rows_exported,
-                "file": str(final_path),
-                "duration_ms": duration_ms,
-            }
+            json.dumps(
+                {
+                    "event": "shipment_export_completed",
+                    "status": "success",
+                    "run_date": run_date,
+                    "rows_exported": rows_exported,
+                    "file": str(final_path),
+                    "duration_ms": duration_ms,
+                },
+                ensure_ascii=False,
+            )
         )
-    except Exception:
+    except Exception as exc:
         if temp_path.exists():
             temp_path.unlink()
+        print(
+            json.dumps(
+                {
+                    "event": "shipment_export_failed",
+                    "status": "failed",
+                    "run_date": run_date,
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
         raise
     finally:
         connection.close()
