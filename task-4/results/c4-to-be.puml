@@ -1,0 +1,37 @@
+@startuml Task4_C4_ToBe
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+
+title Task 4 — TradeWare To Be: асинхронная обработка отчётов через Spring Batch
+
+Person(employee, "Сотрудник склада", "Загружает CSV и получает статус обработки")
+
+System_Boundary(tradeware, "TradeWare / GCP") {
+    Container(frontend, "ERP Frontend", "Angular", "Загрузка отчёта, просмотр статуса")
+    Container(monolith, "Legacy Backend", "Java 11 / WildFly", "Существующая ERP-бизнес-логика; постепенно декомпозируется")
+    Container(intake, "Report Intake Service", "Spring Boot", "Быстрая валидация, регистрация файла, возврат 202 Accepted")
+    Container(queue, "Report Processing Queue", "GCP Pub/Sub / Kafka", "Буферизует burst загрузок и обеспечивает backpressure")
+    Container(batch, "Report Batch Worker", "Spring Boot + Spring Batch", "Chunk-oriented ETL: validate → enrich → batch upsert")
+    ContainerDb(jobRepo, "Batch Job Repository", "PostgreSQL / Cloud SQL", "JobExecution, StepExecution, checkpoints")
+    ContainerDb(referenceDb, "БД справочных данных", "PostgreSQL / Cloud SQL", "Характеристики товаров, промо и справочники")
+    ContainerDb(nomenclatureDb, "БД номенклатуры", "PostgreSQL / Cloud SQL", "Актуальные остатки и данные по товарам")
+    Container(gcs, "Файловое хранилище", "Google Cloud Storage", "Raw CSV и отчёты об ошибках")
+}
+
+Rel(employee, frontend, "Загружает CSV, смотрит статус", "HTTPS")
+Rel(frontend, intake, "Загрузка отчёта", "REST/HTTP")
+Rel(frontend, monolith, "Остальные ERP-операции", "REST/HTTP")
+Rel(intake, gcs, "Сохраняет исходный CSV")
+Rel(intake, queue, "Публикует ReportUploaded(file_id)")
+Rel(batch, queue, "Получает job")
+Rel(batch, gcs, "Читает CSV / пишет validation report")
+Rel(batch, referenceDb, "Читает данные для обогащения", "SQL")
+Rel(batch, nomenclatureDb, "Batch upsert chunk-ами", "SQL")
+Rel(batch, jobRepo, "Сохраняет state/checkpoints", "JDBC")
+Rel(batch, queue, "Публикует ReportProcessed/ReportFailed")
+Rel(intake, queue, "Получает статус обработки")
+Rel(frontend, intake, "Запрашивает статус / получает обновление", "REST/WebSocket")
+
+SHOW_LEGEND()
+@enduml
