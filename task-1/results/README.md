@@ -70,10 +70,11 @@ branch_on_amount
 high_value  regular
    \        /
       join
-       |
- success_email
-
-failure_email <- one_failed(read_source, branch, high_value, regular)
+      / \
+ success  failure
+  email    email
 ```
+
+`join` использует `none_failed_min_one_success`, поэтому выбранная ветка может завершиться успешно, а невыбранная — `skipped`. `success_email` запускается только после успешного `join`, а `failure_email` использует `one_failed` и срабатывает, когда `join` получает состояние ошибки/upstream failure после исчерпания retry.
 
 В POC `read_source` читает CSV и передаёт через XCom только маленький агрегированный summary. В production большие данные через XCom передавать нельзя: следует сохранять промежуточный результат во внешнем хранилище и передавать URI/ID.
