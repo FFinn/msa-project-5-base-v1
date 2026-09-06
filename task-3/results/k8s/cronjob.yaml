@@ -31,6 +31,8 @@ spec:
               image: shipments-exporter:local
               imagePullPolicy: IfNotPresent
               env:
+                - name: BUSINESS_TIMEZONE
+                  value: Europe/Moscow
                 - name: DB_HOST
                   value: shipments-db
                 - name: DB_PORT
