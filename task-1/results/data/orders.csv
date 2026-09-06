@@ -1,0 +1,5 @@
+order_id,customer_id,amount,status
+1,101,150.50,paid
+2,102,420.00,paid
+3,103,575.75,paid
+4,104,85.00,refunded
