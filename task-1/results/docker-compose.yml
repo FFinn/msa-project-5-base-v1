@@ -1,0 +1,28 @@
+services:
+  airflow:
+    image: apache/airflow:2.10.5
+    container_name: task1-airflow
+    command: standalone
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__SMTP__SMTP_HOST: mailhog
+      AIRFLOW__SMTP__SMTP_PORT: "1025"
+      AIRFLOW__SMTP__SMTP_MAIL_FROM: airflow@example.local
+      AIRFLOW__SMTP__SMTP_STARTTLS: "false"
+      AIRFLOW__SMTP__SMTP_SSL: "false"
+      AIRFLOW__EMAIL__EMAIL_BACKEND: airflow.utils.email.send_email_smtp
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mailhog
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: task1-mailhog
+    ports:
+      - "8025:8025"
+      - "1025:1025"
