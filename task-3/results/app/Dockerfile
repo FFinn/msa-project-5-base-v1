@@ -1,16 +1,18 @@
-FROM python:3.12-alpine
+FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apk add --no-cache tzdata \
-    && addgroup -g 10001 -S app \
-    && adduser -u 10001 -S -G app app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY export.py .
-RUN chown -R app:app /app
+RUN chown -R 10001:10001 /app
 
 USER 10001:10001
 ENTRYPOINT ["python", "/app/export.py"]
