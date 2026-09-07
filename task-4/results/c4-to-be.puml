@@ -3,35 +3,35 @@
 
 LAYOUT_LEFT_RIGHT()
 
-title Task 4 — TradeWare To Be: асинхронная обработка отчётов через Spring Batch
+title Задание 4 — TradeWare: асинхронная обработка отчётов через Spring Batch
 
 Person(employee, "Сотрудник склада", "Загружает CSV и получает статус обработки")
 
-System_Boundary(tradeware, "TradeWare / GCP") {
-    Container(frontend, "ERP Frontend", "Angular", "Загрузка отчёта, просмотр статуса")
-    Container(monolith, "Legacy Backend", "Java 11 / WildFly", "Существующая ERP-бизнес-логика; постепенно декомпозируется")
-    Container(intake, "Report Intake Service", "Spring Boot", "Быстрая валидация, регистрация файла, возврат 202 Accepted")
-    Container(queue, "Report Processing Queue", "GCP Pub/Sub / Kafka", "Буферизует burst загрузок и обеспечивает backpressure")
-    Container(batch, "Report Batch Worker", "Spring Boot + Spring Batch", "Chunk-oriented ETL: validate → enrich → batch upsert")
-    ContainerDb(statusDb, "Import Status Store", "PostgreSQL / Cloud SQL", "Бизнес-статус импорта по file_id: ACCEPTED/PROCESSING/COMPLETED/FAILED")
-    ContainerDb(jobRepo, "Batch Job Repository", "PostgreSQL / Cloud SQL", "Технические JobExecution, StepExecution, checkpoints")
-    ContainerDb(referenceDb, "БД справочных данных", "PostgreSQL / Cloud SQL", "Характеристики товаров, промо и справочники")
+System_Boundary(tradeware, "TradeWare / Google Cloud") {
+    Container(frontend, "ERP-интерфейс", "Angular", "Загрузка отчёта и просмотр статуса")
+    Container(monolith, "Существующий бэкенд", "Java 11 / WildFly", "Текущая ERP-бизнес-логика; постепенно декомпозируется")
+    Container(intake, "Сервис приёма отчётов", "Spring Boot", "Быстрая валидация, регистрация файла и возврат 202 Accepted")
+    Container(queue, "Очередь обработки отчётов", "Google Cloud Pub/Sub / Apache Kafka", "Буферизует всплески загрузок и сглаживает нагрузку")
+    Container(batch, "Обработчик пакетных заданий", "Spring Boot + Spring Batch", "Пакетная обработка: валидация → обогащение → массовая запись")
+    ContainerDb(statusDb, "Хранилище статусов импорта", "PostgreSQL / Cloud SQL", "Прикладной статус импорта по file_id: ACCEPTED/PROCESSING/COMPLETED/FAILED")
+    ContainerDb(jobRepo, "Хранилище состояния Spring Batch", "PostgreSQL / Cloud SQL", "Техническое состояние JobExecution, StepExecution и контрольных точек")
+    ContainerDb(referenceDb, "БД справочных данных", "PostgreSQL / Cloud SQL", "Характеристики товаров, промоакции и справочники")
     ContainerDb(nomenclatureDb, "БД номенклатуры", "PostgreSQL / Cloud SQL", "Актуальные остатки и данные по товарам")
-    Container(gcs, "Файловое хранилище", "Google Cloud Storage", "Raw CSV и отчёты об ошибках")
+    Container(gcs, "Файловое хранилище", "Google Cloud Storage", "Исходные CSV и отчёты об ошибках")
 }
 
-Rel(employee, frontend, "Загружает CSV, смотрит статус", "HTTPS")
-Rel(frontend, intake, "Загрузка отчёта / запрос статуса", "REST/HTTP")
+Rel(employee, frontend, "Загружает CSV и смотрит статус", "HTTPS")
+Rel(frontend, intake, "Загрузка отчёта и запрос статуса", "REST/HTTP")
 Rel(frontend, monolith, "Остальные ERP-операции", "REST/HTTP")
 Rel(intake, gcs, "Сохраняет исходный CSV")
 Rel(intake, statusDb, "Создаёт запись ACCEPTED и читает статус", "SQL")
-Rel(intake, queue, "Публикует ReportUploaded(file_id)")
-Rel(batch, queue, "Получает job")
+Rel(intake, queue, "Публикует событие ReportUploaded(file_id)")
+Rel(batch, queue, "Получает задание")
 Rel(batch, statusDb, "Обновляет PROCESSING/COMPLETED/FAILED", "SQL")
-Rel(batch, gcs, "Читает CSV / пишет validation report")
+Rel(batch, gcs, "Читает CSV и пишет отчёт об ошибках")
 Rel(batch, referenceDb, "Читает данные для обогащения", "SQL")
-Rel(batch, nomenclatureDb, "Batch upsert chunk-ами", "SQL")
-Rel(batch, jobRepo, "Сохраняет state/checkpoints", "JDBC")
+Rel(batch, nomenclatureDb, "Выполняет массовую запись порциями", "SQL")
+Rel(batch, jobRepo, "Сохраняет состояние и контрольные точки", "JDBC")
 Rel(batch, queue, "Публикует ReportProcessed/ReportFailed")
 
 SHOW_LEGEND()
