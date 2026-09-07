@@ -60,3 +60,25 @@ docker compose up -d
 - MailHog: `http://localhost:8025`.
 
 Дальнейшие шаги успешного и аварийного сценария описаны в `DEMO.md`.
+
+## Демонстрация
+
+Локальное развёртывание Airflow и MailHog через Docker Compose:
+
+![Локальное развёртывание](screenshots/00-local-deployment.png)
+
+Успешный запуск DAG с ветвлением:
+
+![Успешный запуск DAG](screenshots/01-airflow-dag.png)
+
+Success notification в MailHog:
+
+![Success email](screenshots/02-success-email.png)
+
+Failure-сценарий с retry policy: `read_source` завершился с `Try Number = 3`.
+
+![Retry policy](screenshots/03-retries.png)
+
+Failure notification в MailHog:
+
+![Failure email](screenshots/04-failure-email.png)
