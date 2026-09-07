@@ -33,7 +33,7 @@ System_Boundary(obs, "Контур наблюдаемости") {
     Container(jaeger, "Jaeger", "Распределённая трассировка", "Хранение, поиск и визуализация трассировок")
 }
 
-System_Ext(notifications, "Каналы оповещения", "Telegram / Slack / Email / PagerDuty")
+System_Ext(notifications, "Каналы оповещения", "Telegram / Slack / электронная почта / PagerDuty")
 
 Rel(employee, frontend, "Загружает CSV и смотрит статус", "HTTPS")
 Rel(frontend, intake, "Загрузка отчёта и запрос статуса", "REST/HTTP")
@@ -49,8 +49,8 @@ Rel(batch, nomenclatureDb, "Выполняет массовую запись п�
 Rel(batch, jobRepo, "Сохраняет состояние и контрольные точки", "JDBC")
 Rel(batch, queue, "Публикует ReportProcessed/ReportFailed")
 
-Rel(prometheus, intake, "Забирает /actuator/prometheus", "HTTP pull")
-Rel(prometheus, batch, "Забирает /actuator/prometheus", "HTTP pull")
+Rel(prometheus, intake, "Периодически забирает /actuator/prometheus", "HTTP")
+Rel(prometheus, batch, "Периодически забирает /actuator/prometheus", "HTTP")
 Rel(prometheus, queue, "Собирает метрики очереди через экспортёр")
 Rel(prometheus, statusDb, "Собирает метрики БД через экспортёр")
 Rel(prometheus, jobRepo, "Собирает метрики БД через экспортёр")
