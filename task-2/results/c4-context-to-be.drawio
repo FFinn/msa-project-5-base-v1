@@ -1,31 +1,38 @@
-<mxfile host="app.diagrams.net" modified="2026-09-06T00:00:00.000Z" agent="ChatGPT" version="24.7.17">
+<mxfile host="app.diagrams.net" modified="2026-09-07T00:00:00.000Z" agent="ChatGPT" version="24.7.17">
   <diagram id="task2-context" name="C4 Context To Be">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
         <mxCell id="title" value="Task 2 — C4 System Context To Be: ежедневная выгрузка B2B-прайс-листов" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="40" y="30" width="950" height="40" as="geometry"/>
+          <mxGeometry x="40" y="30" width="1000" height="40" as="geometry"/>
         </mxCell>
-        <mxCell id="b2b" value="&lt;b&gt;B2B-клиент&lt;/b&gt;&lt;br&gt;[Person]&lt;br&gt;Получает кастомный прайс-лист" style="shape=mxgraph.c4.person2;whiteSpace=wrap;html=1;fillColor=#08427B;fontColor=#ffffff;strokeColor=#052E56;" vertex="1" parent="1">
-          <mxGeometry x="60" y="260" width="190" height="120" as="geometry"/>
+
+        <mxCell id="b2b" value="&lt;b&gt;B2B-клиент&lt;/b&gt;&lt;br&gt;[Person]&lt;br&gt;Получает ежедневный кастомный прайс-лист" style="shape=mxgraph.c4.person2;whiteSpace=wrap;html=1;fillColor=#08427B;fontColor=#ffffff;strokeColor=#052E56;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="190" height="125" as="geometry"/>
         </mxCell>
-        <mxCell id="shop" value="&lt;b&gt;Онлайн-магазин&lt;/b&gt;&lt;br&gt;[Software System]&lt;br&gt;Хранит товары, категории, клиентов и индивидуальные цены; формирует прайс-листы" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1168BD;fontColor=#ffffff;strokeColor=#0B4884;" vertex="1" parent="1">
-          <mxGeometry x="410" y="235" width="310" height="170" as="geometry"/>
+
+        <mxCell id="priceListSystem" value="&lt;b&gt;Модуль формирования B2B-прайс-листов&lt;/b&gt;&lt;br&gt;[Software System]&lt;br&gt;Ежедневно в 06:00 формирует индивидуальные CSV/XLS-прайс-листы" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1168BD;fontColor=#ffffff;strokeColor=#0B4884;" vertex="1" parent="1">
+          <mxGeometry x="420" y="245" width="330" height="180" as="geometry"/>
         </mxCell>
-        <mxCell id="k8s" value="&lt;b&gt;Kubernetes platform&lt;/b&gt;&lt;br&gt;[External System]&lt;br&gt;В 06:00 запускает CronJob → Job → Pod" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="410" y="90" width="310" height="100" as="geometry"/>
+
+        <mxCell id="shop" value="&lt;b&gt;Онлайн-магазин&lt;/b&gt;&lt;br&gt;[External System]&lt;br&gt;Предоставляет актуальные данные товаров, категорий, клиентов и индивидуальных цен из PostgreSQL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="430" y="80" width="310" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="storage" value="&lt;b&gt;Объектное хранилище&lt;/b&gt;&lt;br&gt;[External System]&lt;br&gt;Хранит CSV/XLS прайс-листы" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="850" y="260" width="250" height="120" as="geometry"/>
+
+        <mxCell id="storage" value="&lt;b&gt;Объектное хранилище&lt;/b&gt;&lt;br&gt;[External System]&lt;br&gt;Хранит сформированные CSV/XLS-файлы и предоставляет их для выдачи клиентам" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;fontColor=#ffffff;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="900" y="270" width="270" height="140" as="geometry"/>
         </mxCell>
-        <mxCell id="e1" value="Запускает ежедневный экспорт" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="k8s" target="shop">
+
+        <mxCell id="e1" value="Читает актуальные данные [PostgreSQL, read-only]" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="priceListSystem" target="shop">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e2" value="Публикует CSV/XLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="shop" target="storage">
+
+        <mxCell id="e2" value="Публикует готовые CSV/XLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="priceListSystem" target="storage">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-        <mxCell id="e3" value="Получает/скачивает прайс-лист" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="b2b" target="storage">
+
+        <mxCell id="e3" value="Скачивает/получает свой прайс-лист" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="b2b" target="priceListSystem">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
       </root>
