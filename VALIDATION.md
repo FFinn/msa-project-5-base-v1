@@ -3,7 +3,7 @@
 ## Задание 1
 
 - [x] Обоснован выбор Apache Airflow.
-- [x] Описаны интеграции с BigQuery, Redshift, Kafka, Spark и внешними API.
+- [x] Описаны интеграции с BigQuery, Amazon Redshift, Apache Kafka, Apache Spark и внешними API.
 - [x] Описаны ветвление, запуск по событию, резервные сценарии, повторные попытки и уведомления по электронной почте.
 - [x] Обосновано облачное развёртывание.
 - [x] Есть локальный `docker-compose.yml`.
@@ -15,7 +15,7 @@
 
 ## Задание 2
 
-- [x] Заполнено сравнение Spring Batch / Apache Airflow / Kubernetes Job + CronJob / Spark.
+- [x] Заполнено сравнение Spring Batch / Apache Airflow / Kubernetes Job + CronJob / Apache Spark.
 - [x] Выбор Kubernetes CronJob обоснован объёмом данных и простотой процесса.
 - [x] Есть контекстная C4-диаграмма целевого состояния (`.puml`, `.drawio`).
 - [x] Есть дополнительная контейнерная C4-диаграмма.
@@ -40,7 +40,7 @@
 - [x] Учтены 100–150 параллельных загрузок через очередь и контролируемое число обработчиков.
 - [x] Учтено требование: 2 000 строк должны обрабатываться в среднем не дольше 30 секунд; предусмотрено нагрузочное тестирование.
 - [x] Описано хранение исходных файлов, статусов, прикладных данных и технического состояния пакетной обработки.
-- [x] Рассмотрены альтернативы: Airflow, Spring Cloud Data Flow, Kubernetes Job/CronJob, Spark/Dataflow.
+- [x] Рассмотрены альтернативы: Apache Airflow, Spring Cloud Data Flow, Kubernetes Job/CronJob, Apache Spark и Google Cloud Dataflow.
 - [x] Есть C4-диаграмма целевого состояния (`.puml`, `.drawio`).
 
 ## Задание 5
