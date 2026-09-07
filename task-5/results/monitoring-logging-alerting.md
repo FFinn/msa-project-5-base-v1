@@ -17,6 +17,8 @@
 
 Оповещения: Prometheus alert rules → Alertmanager → рабочий канал команды (Telegram/Slack/email/PagerDuty — в зависимости от severity).
 
+Архитектурная диаграмма Task 5 является расширением To Be C4 из Task 4: сохраняются Legacy Backend, Report Intake Service, Report Processing Queue, Report Batch Worker, GCS, Import Status Store, Batch Job Repository, БД справочных данных и БД номенклатуры. Observability Platform добавлена поверх этой архитектуры отдельным блоком.
+
 ## 2. Почему одних RED-метрик недостаточно
 
 RED (`Rate`, `Errors`, `Duration`) отлично подходит для request-driven API, но в материалах курса отдельно отмечено, что RED не является достаточной моделью для batch processing.
@@ -33,14 +35,25 @@ RED (`Rate`, `Errors`, `Duration`) отлично подходит для reques
 
 | Метрика | Тип | Назначение |
 |---|---|---|
-| `http_server_requests_total{method,route,status}` | Counter | Rate и Errors по API |
-| `http_server_request_duration_seconds` | Histogram | latency/p95/p99 |
+| `http_server_requests_seconds_count{method,uri,status}` | Counter | Rate и Errors по API |
+| `http_server_requests_seconds_sum{method,uri,status}` | Counter | суммарная длительность для average latency |
+| `http_server_requests_seconds_bucket{method,uri,status,le}` | Histogram bucket | latency/p95/p99 |
 | `tradeware_uploads_total{result}` | Counter | принятые/отклонённые загрузки |
 | `tradeware_upload_file_size_bytes` | Histogram | изменение размера входных файлов |
 | `jvm_memory_used_bytes` | Gauge | heap pressure |
 | `process_cpu_usage` | Gauge | CPU utilization |
 
 **Важно:** не помещать в labels `user_id`, `file_id`, URL с динамическим id и другие high-cardinality значения. Такие идентификаторы идут в логи/traces.
+
+Для p95/p99 через `http_server_requests_seconds_bucket` нужно включить публикацию histogram в Micrometer:
+
+```yaml
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+```
 
 ### 3.2. Batch Worker / Spring Batch
 
@@ -143,7 +156,7 @@ Alertmanager группирует алерты по `alertname`, `service`, `env
 - `severity`;
 - `service`;
 - `team`;
-- `environment`;
+- `environment` — добавляется через `external_labels` конкретного Prometheus instance, чтобы один и тот же файл правил работал в dev/test/prod;
 - `summary`;
 - `description`;
 - ссылку на `runbook`;
@@ -277,4 +290,4 @@ OpenTelemetry SDK добавляется в Intake Service и Batch Worker.
 
 В production секреты из примеров нельзя хранить в репозитории: токены/credentials должны поступать из Secret Manager/Kubernetes Secret.
 
-Исходник архитектурной диаграммы: `c4-observability.puml`.
+Исходники архитектурной диаграммы: `c4-observability.puml` и `c4-observability.drawio`; экспорт для просмотра: `c4-observability.png`.

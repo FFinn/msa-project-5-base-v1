@@ -13,11 +13,22 @@ TradeWare сочетает request-driven API и асинхронный batch. �
 ## API
 
 - `http_server_requests_seconds_count{method,uri,status}` — request rate и error rate;
-- `http_server_requests_seconds_bucket` — latency/p95/p99;
+- `http_server_requests_seconds_sum{method,uri,status}` — суммарная длительность для average latency;
+- `http_server_requests_seconds_bucket{method,uri,status,le}` — latency/p95/p99;
 - `tradeware_uploads_total{result}` — бизнесово-технический результат загрузок;
 - `tradeware_upload_file_size_bytes` — изменение профиля входных файлов.
 
 Эти показатели отвечают на вопросы: доступен ли API, сколько запросов приходит, растёт ли число ошибок и время ответа.
+
+Для расчёта p95/p99 через `*_bucket` в Spring Boot нужно включить публикацию histogram для `http.server.requests`:
+
+```yaml
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+```
 
 ## Spring Batch
 

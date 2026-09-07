@@ -1,4 +1,5 @@
 groups:
+  # Label environment is injected by Prometheus external_labels for each environment.
   - name: tradeware-batch
     rules:
       - alert: TradeWareBatchJobFailed
@@ -17,7 +18,7 @@ groups:
         expr: |
           sum(rate(tradeware_batch_job_duration_seconds_sum[10m]))
           /
-          clamp_min(sum(rate(tradeware_batch_job_duration_seconds_count[10m])), 1)
+          sum(rate(tradeware_batch_job_duration_seconds_count[10m]))
           > 30
         for: 5m
         labels:
@@ -69,7 +70,7 @@ groups:
         expr: |
           sum(rate(tradeware_batch_rows_skipped_total[10m]))
           /
-          clamp_min(sum(rate(tradeware_batch_rows_read_total[10m])), 1)
+          sum(rate(tradeware_batch_rows_read_total[10m]))
           > 0.01
         for: 10m
         labels:
@@ -99,7 +100,7 @@ groups:
         expr: |
           sum(rate(http_server_requests_seconds_count{job="report-intake-service",status=~"5.."}[5m]))
           /
-          clamp_min(sum(rate(http_server_requests_seconds_count{job="report-intake-service"}[5m])), 1)
+          sum(rate(http_server_requests_seconds_count{job="report-intake-service"}[5m]))
           > 0.05
         for: 5m
         labels:

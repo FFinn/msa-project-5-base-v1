@@ -3,25 +3,29 @@
 
 LAYOUT_LEFT_RIGHT()
 
-title Task 5 — TradeWare To Be: monitoring, logging, alerting and tracing
+title Task 5 - TradeWare To Be: Spring Batch ETL with observability
 
-Person(employee, "Сотрудник склада", "Работает с ERP")
+Person(employee, "Сотрудник склада", "Загружает CSV и получает статус обработки")
 Person(oncall, "DevOps / On-call", "Получает алерты и расследует инциденты")
 
-System_Boundary(apps, "TradeWare application platform / GCP") {
-    Container(frontend, "ERP Frontend", "Angular", "UI")
-    Container(intake, "Report Intake Service", "Spring Boot + Micrometer + OTel", "Приём файлов и status API")
-    Container(queue, "Processing Queue", "Pub/Sub / Kafka", "Буферизация загрузок")
-    Container(batch, "Report Batch Worker", "Spring Batch + Micrometer + OTel", "Chunk ETL")
-    ContainerDb(db, "PostgreSQL", "Cloud SQL", "Номенклатура, справочники, batch/status metadata")
-    Container(gcs, "GCS", "Object Storage", "Raw CSV и error reports")
+System_Boundary(tradeware, "TradeWare application platform / GCP") {
+    Container(frontend, "ERP Frontend", "Angular", "Загрузка отчёта, просмотр статуса")
+    Container(monolith, "Legacy Backend", "Java 11 / WildFly", "Существующая ERP-бизнес-логика; постепенно декомпозируется")
+    Container(intake, "Report Intake Service", "Spring Boot + Micrometer + OTel", "Быстрая валидация, регистрация файла, status API")
+    Container(queue, "Report Processing Queue", "GCP Pub/Sub / Kafka", "Буферизует burst загрузок и обеспечивает backpressure")
+    Container(batch, "Report Batch Worker", "Spring Boot + Spring Batch + Micrometer + OTel", "Chunk-oriented ETL: validate -> enrich -> batch upsert")
+    ContainerDb(statusDb, "Import Status Store", "PostgreSQL / Cloud SQL", "Бизнес-статус импорта по file_id: ACCEPTED/PROCESSING/COMPLETED/FAILED")
+    ContainerDb(jobRepo, "Batch Job Repository", "PostgreSQL / Cloud SQL", "Технические JobExecution, StepExecution, checkpoints")
+    ContainerDb(referenceDb, "БД справочных данных", "PostgreSQL / Cloud SQL", "Характеристики товаров, промо и справочники")
+    ContainerDb(nomenclatureDb, "БД номенклатуры", "PostgreSQL / Cloud SQL", "Актуальные остатки и данные по товарам")
+    Container(gcs, "Файловое хранилище", "Google Cloud Storage", "Raw CSV и отчёты об ошибках")
 }
 
 System_Boundary(obs, "Observability platform") {
     Container(prometheus, "Prometheus", "Metrics TSDB", "Scrape, PromQL, alert rule evaluation")
     Container(grafana, "Grafana", "Visualization", "Dashboards и exploratory metrics")
     Container(alertmanager, "Alertmanager", "Alert routing", "Grouping, inhibition, routing, resolved notifications")
-    Container(filebeat, "Filebeat", "Log agent", "Собирает container/application logs")
+    Container(filebeat, "Filebeat", "Log agent", "Собирает container/application/legacy file logs")
     Container(logstash, "Logstash", "Log pipeline", "Parse, normalize, enrich")
     ContainerDb(elastic, "Elasticsearch", "Search / document store", "Индексы логов + ILM")
     Container(kibana, "Kibana", "Log analytics", "Discover и dashboards")
@@ -31,23 +35,33 @@ System_Boundary(obs, "Observability platform") {
 
 System_Ext(notifications, "Incident channels", "Telegram / Slack / Email / PagerDuty")
 
-Rel(employee, frontend, "Использует")
-Rel(frontend, intake, "REST/WebSocket")
-Rel(intake, queue, "ReportUploaded")
-Rel(batch, queue, "Consume/process status")
-Rel(intake, gcs, "Raw CSV")
-Rel(batch, gcs, "Read/write error report")
-Rel(batch, db, "Batch read/write + metadata", "JDBC")
+Rel(employee, frontend, "Загружает CSV, смотрит статус", "HTTPS")
+Rel(frontend, intake, "Загрузка отчёта / запрос статуса", "REST/HTTP")
+Rel(frontend, monolith, "Остальные ERP-операции", "REST/HTTP")
+Rel(intake, gcs, "Сохраняет исходный CSV")
+Rel(intake, statusDb, "Создаёт запись ACCEPTED и читает статус", "SQL")
+Rel(intake, queue, "Публикует ReportUploaded(file_id)")
+Rel(batch, queue, "Получает job")
+Rel(batch, statusDb, "Обновляет PROCESSING/COMPLETED/FAILED", "SQL")
+Rel(batch, gcs, "Читает CSV / пишет validation report")
+Rel(batch, referenceDb, "Читает данные для обогащения", "SQL")
+Rel(batch, nomenclatureDb, "Batch upsert chunk-ами", "SQL")
+Rel(batch, jobRepo, "Сохраняет state/checkpoints", "JDBC")
+Rel(batch, queue, "Публикует ReportProcessed/ReportFailed")
 
 Rel(prometheus, intake, "Scrapes /actuator/prometheus", "HTTP pull")
 Rel(prometheus, batch, "Scrapes /actuator/prometheus", "HTTP pull")
 Rel(prometheus, queue, "Collects queue metrics/exporter")
-Rel(prometheus, db, "Collects DB metrics/exporter")
+Rel(prometheus, statusDb, "Collects DB metrics/exporter")
+Rel(prometheus, jobRepo, "Collects DB metrics/exporter")
+Rel(prometheus, referenceDb, "Collects DB metrics/exporter")
+Rel(prometheus, nomenclatureDb, "Collects DB metrics/exporter")
 Rel(grafana, prometheus, "PromQL queries")
 Rel(prometheus, alertmanager, "Sends firing/resolved alerts")
 Rel(alertmanager, notifications, "Routes notifications")
 Rel(oncall, grafana, "Investigates metrics")
 
+Rel(monolith, filebeat, "WildFly file/stdout logs")
 Rel(intake, filebeat, "JSON stdout logs")
 Rel(batch, filebeat, "JSON stdout logs")
 Rel(filebeat, logstash, "Ships logs")
