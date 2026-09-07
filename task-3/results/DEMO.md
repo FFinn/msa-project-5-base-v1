@@ -42,9 +42,11 @@ kubectl rollout status deployment/shipments-db
 ```bash
 kubectl apply -f k8s/cronjob.yaml
 kubectl get cronjob shipments-daily-export
+kubectl get cronjob shipments-daily-export \
+  -o jsonpath='{.spec.schedule}{"  timezone="}{.spec.timeZone}{"\n"}'
 ```
 
-В результате должно быть видно расписание `0 20 * * *`.
+В результате должно быть видно расписание `0 20 * * *` и `timezone=Europe/Moscow`.
 
 ## 5. Не ждать 20:00 — запустить Job вручную из шаблона CronJob
 
@@ -88,9 +90,10 @@ concurrencyPolicy: Forbid
 
 Сделать после фактического запуска и положить в `task-3/results/screenshots/`:
 
-1. `01-cronjob.png` — `kubectl get cronjob shipments-daily-export`.
-2. `02-job-completed.png` — `kubectl get jobs,pods` с `Complete/Completed`.
-3. `03-job-log.png` — JSON-лог с `rows_exported`.
-4. `04-csv.png` — содержимое сформированного CSV на PVC.
+1. `00-minikube.png` — `minikube status` и `kubectl config current-context`.
+2. `01-cronjob.png` — `kubectl get cronjob shipments-daily-export` и проверка `schedule/timeZone`.
+3. `02-job-completed.png` — `kubectl get jobs` и `kubectl get pods -l job-name=shipments-export-manual-1` с `Complete/Completed`.
+4. `03-job-log.png` — JSON-лог с `rows_exported`.
+5. `04-csv.png` — содержимое сформированного CSV на PVC.
 
 Скриншоты должны подтверждать реальный запуск в MiniKube.

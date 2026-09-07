@@ -12,7 +12,8 @@
 - `k8s/output-pvc.yaml` — PVC для CSV в POC;
 - `k8s/cronjob.yaml` — целевая конфигурация запуска ежедневно в 20:00;
 - `k8s/output-reader.yaml` — временный Pod для проверки CSV на PVC;
-- `DEMO.md` — сценарий проверки и перечень скриншотов.
+- `DEMO.md` — сценарий проверки и перечень скриншотов;
+- `screenshots/` — скриншоты локального запуска в MiniKube, CronJob, Completed Job, JSON-лога и CSV на PVC.
 
 ## Ключевые решения
 
@@ -30,3 +31,25 @@
 - приложение запускается от непривилегированного пользователя и с `readOnlyRootFilesystem`.
 
 Для production PVC следует заменить на специализированное объектное/аналитическое хранилище, если именно оно принято в инфраструктуре. Контейнер остаётся stateless.
+
+## Демонстрация
+
+MiniKube запущен, текущий Kubernetes context — `minikube`:
+
+![MiniKube status](screenshots/00-minikube.png)
+
+CronJob создан с расписанием `0 20 * * *` и `timeZone: Europe/Moscow`:
+
+![CronJob schedule](screenshots/01-cronjob.png)
+
+Ручной Job, созданный из шаблона CronJob, завершился успешно:
+
+![Completed Job](screenshots/02-job-completed.png)
+
+Лог Job подтверждает успешный экспорт `shipments` и `rows_exported: 3`:
+
+![Job log](screenshots/03-job-log.png)
+
+Reader Pod показывает CSV-файл на PVC с заголовком и тремя строками:
+
+![CSV on PVC](screenshots/04-csv.png)
