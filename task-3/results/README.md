@@ -1,19 +1,19 @@
-# Task 3. Distributed Scheduling с Kubernetes CronJob
+# Задание 3. Распределённый запуск по расписанию с Kubernetes CronJob
 
-Задача: каждый день ровно в **20:00** выгружать данные для аналитиков. В POC экспортируется одна таблица `shipments` из PostgreSQL в CSV.
+Задача: каждый день ровно в **20:00** выгружать данные для аналитиков. В демонстрационном прототипе экспортируется одна таблица `shipments` из PostgreSQL в CSV.
 
 ## Состав решения
 
 - `app/export.py` — потоковая выгрузка `shipments` в CSV;
-- `app/Dockerfile` — Docker-образ экспортёра;
-- `app/requirements.txt` — Python-зависимости;
+- `app/Dockerfile` — Docker-образ приложения экспорта;
+- `app/requirements.txt` — зависимости Python;
 - `k8s/postgres-demo.yaml` — PostgreSQL для демонстрации в MiniKube;
-- `k8s/init.sql` — отдельный SQL-пример тестовых данных;
-- `k8s/output-pvc.yaml` — PVC для CSV в POC;
-- `k8s/cronjob.yaml` — целевая конфигурация запуска ежедневно в 20:00;
+- `k8s/init.sql` — пример тестовых данных;
+- `k8s/output-pvc.yaml` — PVC для CSV в демонстрационном прототипе;
+- `k8s/cronjob.yaml` — целевая конфигурация ежедневного запуска в 20:00;
 - `k8s/output-reader.yaml` — временный Pod для проверки CSV на PVC;
 - `DEMO.md` — сценарий проверки и перечень скриншотов;
-- `screenshots/` — скриншоты локального запуска в MiniKube, CronJob, Completed Job, JSON-лога и CSV на PVC.
+- `screenshots/` — скриншоты локального запуска в MiniKube, CronJob, завершённого Job, JSON-лога и CSV на PVC.
 
 ## Ключевые решения
 
@@ -21,35 +21,35 @@
 - если бизнес использует другой часовой пояс, `timeZone` нужно заменить на него, не пересчитывая cron вручную;
 - `concurrencyPolicy: Forbid` — новый **плановый** запуск этого CronJob не пересекается с предыдущим;
 - `startingDeadlineSeconds` — ограничивает допустимый запоздалый запуск;
-- `backoffLimit` — ограниченные повторы при ошибке;
-- `restartPolicy: Never` — повторением управляет Job controller;
-- requests/limits — предсказуемое потребление CPU/RAM;
-- экспорт выполняется через server-side cursor партиями по 5000 строк, а не загружает всю таблицу в память;
-- файл сначала пишется во временное имя, затем атомарно переименовывается;
-- имя файла содержит бизнес-дату и обеспечивает понятный повторный запуск;
-- секреты БД передаются через Kubernetes Secret. Значения в demo-манифесте предназначены только для локального MiniKube;
+- `backoffLimit` — ограничивает число повторных запусков при ошибке;
+- `restartPolicy: Never` — повторным запуском управляет контроллер Job;
+- `resources.requests/limits` — задают предсказуемое потребление CPU и памяти;
+- экспорт выполняется через серверный курсор партиями по 5000 строк, а не загружает всю таблицу в память;
+- файл сначала записывается под временным именем, затем переименовывается в итоговый;
+- имя файла содержит бизнес-дату и позволяет однозначно понимать результат повторного запуска;
+- секреты БД передаются через Kubernetes Secret. Значения в демонстрационном манифесте предназначены только для локального MiniKube;
 - приложение запускается от непривилегированного пользователя и с `readOnlyRootFilesystem`.
 
-Для production PVC следует заменить на специализированное объектное/аналитическое хранилище, если именно оно принято в инфраструктуре. Контейнер остаётся stateless.
+В промышленной среде PVC следует заменить на специализированное объектное или аналитическое хранилище, если именно оно принято в инфраструктуре. Сам контейнер не должен хранить состояние между запусками.
 
 ## Демонстрация
 
-MiniKube запущен, текущий Kubernetes context — `minikube`:
+MiniKube запущен, текущий контекст Kubernetes — `minikube`:
 
-![MiniKube status](screenshots/00-minikube.png)
+![Состояние MiniKube](screenshots/00-minikube.png)
 
 CronJob создан с расписанием `0 20 * * *` и `timeZone: Europe/Moscow`:
 
-![CronJob schedule](screenshots/01-cronjob.png)
+![Расписание CronJob](screenshots/01-cronjob.png)
 
 Ручной Job, созданный из шаблона CronJob, завершился успешно:
 
-![Completed Job](screenshots/02-job-completed.png)
+![Завершённый Job](screenshots/02-job-completed.png)
 
-Лог Job подтверждает успешный экспорт `shipments` и `rows_exported: 3`:
+Журнал выполнения Job подтверждает успешный экспорт `shipments` и `rows_exported: 3`:
 
-![Job log](screenshots/03-job-log.png)
+![Журнал Job](screenshots/03-job-log.png)
 
-Reader Pod показывает CSV-файл на PVC с заголовком и тремя строками:
+Временный Pod показывает CSV-файл на PVC с заголовком и тремя строками:
 
-![CSV on PVC](screenshots/04-csv.png)
+![CSV на PVC](screenshots/04-csv.png)
