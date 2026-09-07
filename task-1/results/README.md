@@ -1,23 +1,23 @@
-# Task 1. Выбор и реализация решения для пакетной обработки данных
+# Задание 1. Выбор и реализация решения для пакетной обработки данных
 
 Для решения выбран **Apache Airflow**.
 
 Архитектурное обоснование выбора оформлено отдельно в формате ADR:
 
-- `ADR-001-batch-processing-platform.md` — контекст, decision drivers, рассмотренные альтернативы, интеграции с BigQuery/Redshift/Kafka/Spark, branching, event-triggered запуск, fallback/retry/email, cloud deployment и последствия решения.
+- `ADR-001-batch-processing-platform.md` — контекст, требования, рассмотренные альтернативы, интеграции с BigQuery, Redshift, Kafka и Spark, ветвление, запуск по событию, повторные попытки, резервный сценарий, уведомления и облачное развёртывание.
 
-## Состав POC
+## Состав демонстрационного прототипа
 
 В этой директории находятся:
 
 - `ADR-001-batch-processing-platform.md` — архитектурное обоснование выбора Airflow;
-- `docker-compose.yml` — локальный Apache Airflow + MailHog;
-- `dags/marketing_etl.py` — DAG с чтением источника, анализом, ветвлением, retry и email;
+- `docker-compose.yml` — локально развёрнутые Apache Airflow и MailHog;
+- `dags/marketing_etl.py` — DAG с чтением источника, анализом, ветвлением, повторными попытками и уведомлениями;
 - `data/orders.csv` — тестовый источник данных;
-- `DEMO.md` — пошаговый сценарий локальной демонстрации и перечень необходимых скриншотов;
-- `screenshots/` — скриншоты локального развёртывания, успешного/аварийного сценариев, retry и email-уведомлений.
+- `DEMO.md` — пошаговый сценарий локальной демонстрации;
+- `screenshots/` — скриншоты локального развёртывания, успешного и аварийного сценариев, повторных попыток и уведомлений.
 
-## Что демонстрирует POC
+## Что демонстрирует прототип
 
 ```text
 read_source
@@ -35,19 +35,19 @@ high_value  regular
 DAG `marketing_batch_poc` закрывает требования задания:
 
 1. **Чтение из источника данных** — `read_source` читает CSV.
-2. **Анализ данных** — рассчитывается агрегированный `total_amount`.
+2. **Анализ данных** — рассчитывается суммарное значение `total_amount`.
 3. **Ветвление** — `BranchPythonOperator` выбирает `high_value_processing` либо `regular_processing`.
-4. **Условное объединение веток** — `join` использует `none_failed_min_one_success`; невыбранная ветка может быть `skipped`.
-5. **Уведомление об успехе** — `success_email` отправляет email через локальный MailHog.
-6. **Retry policy** — для tasks настроены `retries`, `retry_delay`, exponential backoff и `max_retry_delay`.
-7. **Failure path** — после исчерпания retries аварийная ветка приводит к `failure_email`.
+4. **Объединение веток** — `join` использует правило `none_failed_min_one_success`; невыбранная ветка помечается как `skipped`.
+5. **Уведомление об успехе** — `success_email` отправляет письмо через локальный MailHog.
+6. **Повторные попытки** — для задач настроены `retries`, `retry_delay`, `retry_exponential_backoff` и `max_retry_delay`.
+7. **Аварийный сценарий** — после исчерпания повторных попыток выполняется ветка обработки ошибки.
 8. **Уведомление об ошибке** — `failure_email` отправляет письмо в MailHog.
 
-## Важное ограничение POC
+## Важное ограничение прототипа
 
-`read_source` передаёт через XCom только небольшой агрегированный summary.
+`read_source` передаёт через XCom только небольшой итоговый набор служебных данных.
 
-В production Airflow не должен передавать через XCom весь набор примерно из 1 млн записей. Большие промежуточные данные следует сохранять во внешнем хранилище/аналитической системе, а между tasks передавать URI, ID или небольшие metadata.
+В промышленной среде Airflow не должен передавать через XCom весь набор примерно из миллиона записей. Крупные промежуточные данные следует сохранять во внешнем хранилище или аналитической системе, а между задачами передавать URI, идентификаторы и небольшие метаданные.
 
 ## Локальный запуск
 
@@ -57,10 +57,10 @@ docker compose up -d
 
 После запуска:
 
-- Airflow UI: `http://localhost:8080`;
-- MailHog: `http://localhost:8025`.
+- веб-интерфейс Airflow: `http://localhost:8080`;
+- веб-интерфейс MailHog: `http://localhost:8025`.
 
-Дальнейшие шаги успешного и аварийного сценария описаны в `DEMO.md`.
+Дальнейшие шаги успешного и аварийного сценариев описаны в `DEMO.md`.
 
 ## Демонстрация
 
@@ -72,14 +72,14 @@ docker compose up -d
 
 ![Успешный запуск DAG](screenshots/01-airflow-dag.png)
 
-Success notification в MailHog:
+Письмо об успешном завершении в MailHog:
 
-![Success email](screenshots/02-success-email.png)
+![Уведомление об успехе](screenshots/02-success-email.png)
 
-Failure-сценарий с retry policy: `read_source` завершился с `Try Number = 3`.
+Аварийный сценарий с повторными попытками: `read_source` завершился с `Try Number = 3`.
 
-![Retry policy](screenshots/03-retries.png)
+![Повторные попытки](screenshots/03-retries.png)
 
-Failure notification в MailHog:
+Письмо об ошибке в MailHog:
 
-![Failure email](screenshots/04-failure-email.png)
+![Уведомление об ошибке](screenshots/04-failure-email.png)
