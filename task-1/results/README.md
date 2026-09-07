@@ -1,66 +1,22 @@
 # Task 1. Выбор и реализация решения для пакетной обработки данных
 
-## Выбранное решение: Apache Airflow
+Для решения выбран **Apache Airflow**.
 
-Для кейса маркетингового отдела выбран **Apache Airflow**. Главная причина — требуется не просто обработать около 1 млн записей, а гибко оркестрировать разнородный pipeline: файловая система, PostgreSQL, Kafka, внешние API, BigQuery, Redshift и Spark, с ветвлениями, retry, уведомлениями и наблюдаемостью.
+Архитектурное обоснование выбора оформлено отдельно в формате ADR:
 
-Airflow здесь используется именно как **оркестратор**, а не как движок обработки данных. Тяжёлые вычисления следует делегировать PostgreSQL/BigQuery/Redshift/Spark, а между задачами передавать ссылки на данные, идентификаторы или небольшие служебные значения, а не миллион строк через XCom.
+- `ADR-001-batch-processing-platform.md` — контекст, decision drivers, рассмотренные альтернативы, интеграции с BigQuery/Redshift/Kafka/Spark, branching, event-triggered запуск, fallback/retry/email, cloud deployment и последствия решения.
 
-## Почему Airflow подходит
+## Состав POC
 
-| Требование | Решение в Airflow |
-|---|---|
-| PostgreSQL | Готовые connection/hook/operator из provider PostgreSQL |
-| BigQuery | `apache-airflow-providers-google`, BigQuery operators/hooks |
-| Redshift | `apache-airflow-providers-amazon`, Redshift operators/hooks |
-| Kafka | `apache-airflow-providers-apache-kafka`, sensors/operators; также можно триггерить DAG внешним consumer/REST API |
-| Spark | `SparkSubmitOperator` и Spark provider |
-| Внешние API | `HttpOperator`/hooks или обычный Python-код |
-| Ветвление | `BranchPythonOperator`, trigger rules |
-| Условия и fallback | trigger rules (`one_failed`, `none_failed_min_one_success` и др.), callbacks |
-| Event triggers | REST API trigger DAG run; sensors; для настоящего low-latency event-driven сценария событие лучше принимать Kafka consumer/функцией и триггерить DAG |
-| Retry | `retries`, `retry_delay`, exponential backoff на уровне task |
-| Email | `EmailOperator`, callbacks, SMTP |
-| Мониторинг | Web UI, task logs, состояние DAG/task в Metadata DB; экспорт метрик во внешние системы |
+В этой директории находятся:
 
-### Почему не Spring Batch
-
-Spring Batch хорошо подходит для Java ETL внутри приложения и chunk-oriented processing, но здесь инфраструктура гетерогенная и требуется оркестрация большого количества внешних систем. Для такого DAG Airflow проще расширять и сопровождать.
-
-### Почему не Kubernetes CronJob
-
-CronJob отлично подходит для одной независимой периодической контейнеризованной задачи. Но он не предоставляет полноценный DAG, ветвления, централизованные зависимости и богатую модель повторных запусков/наблюдаемости.
-
-### Почему не Spark как основное решение
-
-Spark — вычислительный движок, а не workflow-оркестратор. Его разумно запускать из Airflow для тяжёлого `Transform`.
-
-## Развёртывание в облаке
-
-### Целевой вариант
-
-1. **Managed Airflow** (например, Cloud Composer в GCP) — минимальная операционная нагрузка на команду.
-2. Либо Airflow в Kubernetes/GKE:
-   - Scheduler и Webserver как отдельные deployment;
-   - PostgreSQL как отказоустойчивая Metadata DB;
-   - KubernetesExecutor или CeleryExecutor;
-   - DAG-и доставляются из Git/CI;
-   - secrets хранятся в Secret Manager/Kubernetes Secrets;
-   - логи и метрики отправляются в централизованную observability-платформу.
-3. Для тяжёлых шагов Airflow запускает Spark/BigQuery/Redshift, а не обрабатывает большие наборы данных в памяти scheduler/worker.
-
-Для объёма около **1 млн записей за запуск** сам по себе этот объём не требует Spark. Решение зависит от веса строки и сложности преобразований. Сначала следует использовать SQL/bulk-операции, а Spark подключать, когда это подтверждено замерами.
-
-## POC
-
-POC находится в этой директории:
-
-- `docker-compose.yml` — локальный Airflow + MailHog;
+- `ADR-001-batch-processing-platform.md` — архитектурное обоснование выбора Airflow;
+- `docker-compose.yml` — локальный Apache Airflow + MailHog;
 - `dags/marketing_etl.py` — DAG с чтением источника, анализом, ветвлением, retry и email;
-- `data/orders.csv` — тестовый источник;
-- `DEMO.md` — точные шаги запуска и список скриншотов для сдачи.
+- `data/orders.csv` — тестовый источник данных;
+- `DEMO.md` — пошаговый сценарий локальной демонстрации и перечень необходимых скриншотов.
 
-### Pipeline POC
+## Что демонстрирует POC
 
 ```text
 read_source
@@ -75,6 +31,32 @@ high_value  regular
   email    email
 ```
 
-`join` использует `none_failed_min_one_success`, поэтому выбранная ветка может завершиться успешно, а невыбранная — `skipped`. `success_email` запускается только после успешного `join`, а `failure_email` использует `one_failed` и срабатывает, когда `join` получает состояние ошибки/upstream failure после исчерпания retry.
+DAG `marketing_batch_poc` закрывает требования задания:
 
-В POC `read_source` читает CSV и передаёт через XCom только маленький агрегированный summary. В production большие данные через XCom передавать нельзя: следует сохранять промежуточный результат во внешнем хранилище и передавать URI/ID.
+1. **Чтение из источника данных** — `read_source` читает CSV.
+2. **Анализ данных** — рассчитывается агрегированный `total_amount`.
+3. **Ветвление** — `BranchPythonOperator` выбирает `high_value_processing` либо `regular_processing`.
+4. **Условное объединение веток** — `join` использует `none_failed_min_one_success`; невыбранная ветка может быть `skipped`.
+5. **Уведомление об успехе** — `success_email` отправляет email через локальный MailHog.
+6. **Retry policy** — для tasks настроены `retries`, `retry_delay`, exponential backoff и `max_retry_delay`.
+7. **Failure path** — после исчерпания retries аварийная ветка приводит к `failure_email`.
+8. **Уведомление об ошибке** — `failure_email` отправляет письмо в MailHog.
+
+## Важное ограничение POC
+
+`read_source` передаёт через XCom только небольшой агрегированный summary.
+
+В production Airflow не должен передавать через XCom весь набор примерно из 1 млн записей. Большие промежуточные данные следует сохранять во внешнем хранилище/аналитической системе, а между tasks передавать URI, ID или небольшие metadata.
+
+## Локальный запуск
+
+```bash
+docker compose up -d
+```
+
+После запуска:
+
+- Airflow UI: `http://localhost:8080`;
+- MailHog: `http://localhost:8025`.
+
+Дальнейшие шаги успешного и аварийного сценария описаны в `DEMO.md`.
