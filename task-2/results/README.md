@@ -8,6 +8,7 @@
 
 - `ADR-002-b2b-price-list-batch-processing.md` — контекст, decision drivers, сравнение Spring Batch / Apache Airflow / K8s Job+CronJob / Spark, принятое решение и последствия;
 - `c4-context-to-be.drawio` — редактируемая **C4 System Context To Be** диаграмма;
+- `c4-context-to-be.png` — экспорт диаграммы для просмотра прямо в GitHub README;
 - `c4-context-to-be.puml` — исходник C4 System Context в PlantUML;
 - `c4-to-be.puml` — дополнительная C4 Container To Be диаграмма с детализацией exporter/БД/object storage;
 - `IMPLEMENTATION_PLAN.md` — верхнеуровневый пошаговый план конфигурации и имплементации.
@@ -37,6 +38,8 @@
 Полное обоснование и сравнительная таблица находятся в `ADR-002-b2b-price-list-batch-processing.md`.
 
 ## C4 System Context To Be
+
+![C4 System Context To Be](c4-context-to-be.png)
 
 На контекстной диаграмме выделен отдельный программный модуль **«Модуль формирования B2B-прайс-листов»**.
 
