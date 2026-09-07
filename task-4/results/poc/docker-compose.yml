@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: task4-postgres
+    environment:
+      POSTGRES_DB: tradeware
+      POSTGRES_USER: tradeware
+      POSTGRES_PASSWORD: tradeware-demo-password
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradeware -d tradeware"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  spring-batch-app:
+    build:
+      context: ./app
+    container_name: task4-spring-batch-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tradeware
+      SPRING_DATASOURCE_USERNAME: tradeware
+      SPRING_DATASOURCE_PASSWORD: tradeware-demo-password
+      APP_INPUT_FILE: /data/sample.csv
+      APP_BATCH_CHUNK_SIZE: "2"
+    volumes:
+      - ./sample.csv:/data/sample.csv:ro

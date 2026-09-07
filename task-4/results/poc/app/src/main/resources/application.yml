@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: task4-spring-batch-poc
+  main:
+    web-application-type: none
+  datasource:
+    url: jdbc:postgresql://localhost:5434/tradeware
+    username: tradeware
+    password: tradeware-demo-password
+  sql:
+    init:
+      mode: always
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
+
+app:
+  input-file: ${APP_INPUT_FILE:./sample.csv}
+  batch:
+    chunk-size: ${APP_BATCH_CHUNK_SIZE:2}
+
+logging:
+  level:
+    root: INFO

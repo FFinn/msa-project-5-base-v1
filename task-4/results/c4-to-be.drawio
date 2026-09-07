@@ -29,6 +29,7 @@
         <mxCell id="e10" value="read/enrich" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="batch" target="reference"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e11" value="batch upsert" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="batch" target="nomenclature"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e12" value="PROCESSING/COMPLETED/FAILED" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;" edge="1" parent="1" source="batch" target="status"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="ReportProcessed/ReportFailed" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;dashed=1;strokeColor=#6666FF;fontColor=#333333;" edge="1" parent="1" source="batch" target="queue"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>

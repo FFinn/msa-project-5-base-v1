@@ -42,7 +42,8 @@
 4. Intake API публикует команду `ReportUploaded(file_id, object_uri)` в очередь (в GCP — Pub/Sub; допустим Kafka при наличии корпоративного брокера) и немедленно возвращает пользователю `202 Accepted` + `file_id`, не удерживая HTTP-запрос до конца ETL.
 5. Spring Batch Worker получает job, переводит бизнес-статус в `PROCESSING` и запускает Spring Batch `Job`.
 6. Job обрабатывает CSV chunk-ами:
-   - `ItemReader` — потоково читает CSV из GCS/локального временного файла;
+   - `ItemReader` — для надёжного restart worker загружает immutable CSV из GCS во временный локальный файл и обрабатывает его restartable `FlatFileItemReader`; состояние reader сохраняется в `ExecutionContext`;
+   - при прямом чтении из GCS-stream должен использоваться custom restartable `ItemStreamReader`, иначе нельзя гарантировать resume строго с нужной строки после сбоя;
    - `ItemProcessor` — полная валидация, нормализация и обогащение справочными данными;
    - `ItemWriter` — batch insert/upsert в PostgreSQL, а не по одной строке.
 7. Spring Batch хранит **техническое состояние** `JobExecution`, `StepExecution` и checkpoints в **JobRepository (PostgreSQL)**.
@@ -87,7 +88,8 @@
 - ошибки конкретной строки могут использовать `skip` только для заранее согласованных типов ошибок и с лимитом; бизнес-критичные ошибки должны завершать job;
 - writer должен быть идемпотентным: upsert/unique business key + `file_id`/version;
 - повторный job с теми же параметрами не должен создавать дубликаты;
-- бизнес-статус изменяется идемпотентно по `file_id` и не используется вместо транзакционных checkpoints Spring Batch.
+- бизнес-статус изменяется идемпотентно по `file_id` и не используется вместо транзакционных checkpoints Spring Batch;
+- для production-связки «обновить Import Status Store + опубликовать `ReportProcessed`/`ReportFailed`» желательно использовать transactional outbox, чтобы сбой между SQL update и publish не приводил к потерянному событию.
 
 ## 4. Хранение данных
 
@@ -178,6 +180,7 @@ Spring Batch не обязан постоянно работать как оди
 - появляется очередь и eventual consistency: пользователь получает результат асинхронно;
 - JobRepository становится критической инфраструктурой;
 - появляется отдельная бизнес-модель статусов, которую нужно согласованно обновлять при сбоях;
+- без transactional outbox есть риск dual-write между обновлением статуса и публикацией финального события;
 - неверная concurrency может всё равно перегрузить PostgreSQL;
 - слишком большой chunk способен увеличить memory/locks/recovery time;
 - идемпотентность writer и повторных запусков должна быть спроектирована явно;
