@@ -61,7 +61,7 @@ Rel(prometheus, alertmanager, "Передаёт активные и закрыт
 Rel(alertmanager, notifications, "Направляет уведомления")
 Rel(oncall, grafana, "Анализирует метрики")
 
-Rel(monolith, filebeat, "Файловые и stdout-логи WildFly")
+Rel(monolith, filebeat, "Файловые логи и stdout WildFly")
 Rel(intake, filebeat, "JSON-логи из stdout")
 Rel(batch, filebeat, "JSON-логи из stdout")
 Rel(filebeat, logstash, "Передаёт логи")
