@@ -2,25 +2,25 @@
 
 ## Подход
 
-TradeWare сочетает request-driven API и асинхронный batch. Поэтому одной методологии RED недостаточно:
+В TradeWare есть два разных типа нагрузки: обычные HTTP-запросы и асинхронная пакетная обработка. Поэтому одной методологии RED недостаточно:
 
-- для `Report Intake Service` используются **RED / Four Golden Signals**;
-- для Spring Batch — специализированные job/step/queue/SLA-метрики;
-- для инфраструктуры и БД — **USE** (`Utilization`, `Saturation`, `Errors`).
+- для сервиса приёма отчётов используются **RED** и **четыре золотых сигнала**;
+- для Spring Batch — метрики заданий, шагов, очереди и соблюдения времени обработки;
+- для инфраструктуры и БД — **USE**: утилизация, насыщенность и ошибки.
 
-Метрики собираются Prometheus по pull-модели. Spring Boot экспортирует их через Micrometer/Actuator (`/actuator/prometheus`), Kubernetes/Cloud SQL/очередь — через соответствующие exporters/integration.
+Prometheus забирает метрики по модели `pull`. Spring Boot публикует их через Micrometer/Actuator на `/actuator/prometheus`, а Kubernetes, Cloud SQL и очередь — через соответствующие экспортёры и готовые интеграции.
 
 ## API
 
-- `http_server_requests_seconds_count{method,uri,status}` — request rate и error rate;
-- `http_server_requests_seconds_sum{method,uri,status}` — суммарная длительность для average latency;
-- `http_server_requests_seconds_bucket{method,uri,status,le}` — latency/p95/p99;
-- `tradeware_uploads_total{result}` — бизнесово-технический результат загрузок;
-- `tradeware_upload_file_size_bytes` — изменение профиля входных файлов.
+- `http_server_requests_seconds_count{method,uri,status}` — частота запросов и доля ошибок;
+- `http_server_requests_seconds_sum{method,uri,status}` — суммарная длительность запросов для расчёта среднего времени;
+- `http_server_requests_seconds_bucket{method,uri,status,le}` — распределение длительности и расчёт p95/p99;
+- `tradeware_uploads_total{result}` — число принятых и отклонённых загрузок;
+- `tradeware_upload_file_size_bytes` — изменение профиля размеров входных файлов.
 
-Эти показатели отвечают на вопросы: доступен ли API, сколько запросов приходит, растёт ли число ошибок и время ответа.
+Эти показатели отвечают на простые эксплуатационные вопросы: доступен ли API, сколько запросов приходит, растёт ли число ошибок и не увеличивается ли время ответа.
 
-Для расчёта p95/p99 через `*_bucket` в Spring Boot нужно включить публикацию histogram для `http.server.requests`:
+Для расчёта p95/p99 по `*_bucket` в Spring Boot нужно включить публикацию гистограммы для `http.server.requests`:
 
 ```yaml
 management:
@@ -35,62 +35,66 @@ management:
 - `tradeware_batch_jobs_started_total`;
 - `tradeware_batch_jobs_completed_total`;
 - `tradeware_batch_jobs_failed_total{error_code}`;
-- `tradeware_batch_job_duration_seconds{size_class}` — Histogram;
-- `tradeware_batch_chunk_duration_seconds` — Histogram;
+- `tradeware_batch_job_duration_seconds{size_class}` — гистограмма;
+- `tradeware_batch_chunk_duration_seconds` — гистограмма;
 - `tradeware_batch_rows_read_total`;
 - `tradeware_batch_rows_written_total`;
 - `tradeware_batch_rows_skipped_total{reason}`;
 - `tradeware_batch_retries_total{reason}`;
 - `tradeware_batch_active_jobs`.
 
-Они показывают throughput, стабильность, стоимость retry и позволяют проверить бизнес-требование: средняя обработка отчёта на 2 000 строк должна укладываться в 30 секунд.
+Они показывают пропускную способность, устойчивость обработки и стоимость повторных попыток. Кроме того, по ним можно проверить бизнес-требование: среднее время обработки отчёта на 2 000 строк должно быть не более 30 секунд.
 
-Для SLA используется низкокардинальная метка `size_class` с фиксированными значениями: `le_2000`, `2001_10000`, `gt_10000`. Алерт на 30 секунд считается только для `size_class="le_2000"`, чтобы крупные файлы не искажали требование к типовым отчётам на 2 000 строк.
+Для этого используется низкокардинальная метка `size_class` с фиксированными значениями: `le_2000`, `2001_10000`, `gt_10000`. Правило на 30 секунд применяется только к `size_class="le_2000"`, чтобы крупные файлы не искажали оценку типового отчёта.
 
-## Очередь и backpressure
+## Очередь
 
-- `tradeware_queue_depth`;
-- `tradeware_queue_oldest_message_age_seconds`;
-- consumption rate;
-- publish/consume errors.
+- `tradeware_queue_depth` — количество сообщений в очереди;
+- `tradeware_queue_oldest_message_age_seconds` — возраст самого старого сообщения;
+- скорость публикации и чтения сообщений;
+- ошибки публикации и чтения.
 
-Для burst 100–150 загрузок это ключевые показатели насыщения. Даже при нормальном CPU очередь может уже расти и нарушать SLA.
+При всплеске до 100–150 загрузок именно очередь первой показывает, справляется ли система. CPU может ещё оставаться в норме, а время ожидания уже расти и нарушать требования бизнеса.
 
 ## PostgreSQL
 
-Нужно собирать:
+Необходимо собирать:
 
-- active/max connections;
-- pool utilization;
-- query/transaction duration;
-- transaction rate;
-- lock waits/deadlocks;
-- disk I/O;
-- errors/timeouts.
+- число активных соединений и допустимый максимум;
+- загрузку пула соединений;
+- длительность запросов и транзакций;
+- число транзакций в единицу времени;
+- ожидания блокировок и взаимоблокировки;
+- дисковый ввод-вывод;
+- ошибки и тайм-ауты.
 
-Рост числа workers без контроля способен перегрузить PostgreSQL, поэтому DB saturation является обязательным ограничителем масштабирования.
+Рост числа обработчиков без контроля способен перегрузить PostgreSQL. Поэтому насыщенность БД является обязательным ограничителем горизонтального масштабирования.
 
-## Kubernetes/JVM
+## Kubernetes и JVM
 
-- CPU utilization/throttling;
-- memory working set и JVM heap;
-- OOMKilled/restarts;
-- pending pods;
-- configured/active worker concurrency;
-- filesystem/volume errors.
+Нужно контролировать:
 
-## Cardinality
+- загрузку CPU и его ограничение;
+- рабочий набор памяти и использование кучи JVM;
+- `OOMKilled` и перезапуски Pod;
+- Pod, ожидающие размещения;
+- настроенное и фактическое число параллельных обработчиков;
+- ошибки файловой системы и томов.
 
-В Prometheus labels нельзя помещать `file_id`, `user_id`, trace id или URL с динамическими идентификаторами: это создаёт высокую cardinality. Для расследования конкретного файла используются Kibana и Jaeger. В labels остаются ограниченные множества: `service`, `environment`, `status`, `error_code`, `reason`, `method`, нормализованный `uri`.
+## Кардинальность меток
 
-## Основные алерты
+В метки Prometheus нельзя помещать `file_id`, `user_id`, `trace_id` или URL с динамическими идентификаторами: это создаёт слишком большое число временных рядов. Для расследования конкретного файла используются Kibana и Jaeger.
 
-- failed batch job после retry — critical;
-- queue oldest age выше допустимого — critical;
-- устойчивый рост queue depth — warning;
-- средняя batch duration > 30 сек — warning;
-- Intake API down / высокий 5xx — critical;
-- DB pool saturation > 80% — warning;
-- повышенный skip/retry rate — warning.
+В метках остаются только значения с ограниченным набором вариантов: `service`, `environment`, `status`, `error_code`, `reason`, `method`, нормализованный `uri`.
 
-Стартовые пороги являются гипотезами и должны быть откалиброваны нагрузочным тестом и SLO. Пример PromQL находится в `prometheus-alerts.yml`.
+## Основные оповещения
+
+- пакетное задание завершилось ошибкой после исчерпания повторных попыток — критическое;
+- возраст самого старого сообщения в очереди выше допустимого — критическое;
+- очередь устойчиво растёт — предупреждение;
+- среднее время обработки типового отчёта больше 30 секунд — предупреждение;
+- сервис приёма отчётов недоступен или резко выросло число HTTP 5xx — критическое;
+- загрузка пула соединений БД выше 80% — предупреждение;
+- выросла доля повторных попыток или пропущенных строк — предупреждение.
+
+Начальные пороги являются рабочей гипотезой. Их нужно откалибровать по результатам нагрузочного тестирования и согласованного SLO. Примеры запросов PromQL находятся в `prometheus-alerts.yml`.
