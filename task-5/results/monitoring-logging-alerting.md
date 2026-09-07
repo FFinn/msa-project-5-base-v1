@@ -278,7 +278,7 @@ OpenTelemetry SDK добавляется в Intake Service и Batch Worker.
 
 Типовой incident flow:
 
-1. Alertmanager: `BatchQueueAgeHigh`.
+1. Alertmanager: `TradeWareQueueAgeHigh`.
 2. Grafana: видим рост queue age и DB pool saturation.
 3. Kibana: фильтр `service=report-batch-worker AND level=ERROR/WARN`.
 4. По `trace_id` открываем Jaeger.
