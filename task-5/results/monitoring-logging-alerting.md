@@ -19,6 +19,10 @@
 
 Архитектурная диаграмма Task 5 является расширением To Be C4 из Task 4: сохраняются Legacy Backend, Report Intake Service, Report Processing Queue, Report Batch Worker, GCS, Import Status Store, Batch Job Repository, БД справочных данных и БД номенклатуры. Observability Platform добавлена поверх этой архитектуры отдельным блоком.
 
+## Архитектура To Be
+
+![TradeWare observability architecture](c4-observability.png)
+
 ## 2. Почему одних RED-метрик недостаточно
 
 RED (`Rate`, `Errors`, `Duration`) отлично подходит для request-driven API, но в материалах курса отдельно отмечено, что RED не является достаточной моделью для batch processing.
@@ -62,7 +66,7 @@ management:
 | `tradeware_batch_jobs_started_total` | Counter | интенсивность batch-нагрузки |
 | `tradeware_batch_jobs_completed_total` | Counter | успешность обработки |
 | `tradeware_batch_jobs_failed_total{error_code}` | Counter | частота и типы отказов |
-| `tradeware_batch_job_duration_seconds` | Histogram | контроль требования 2 000 строк ≤ 30 сек и p95 |
+| `tradeware_batch_job_duration_seconds{size_class}` | Histogram | контроль требования 2 000 строк ≤ 30 сек и p95 |
 | `tradeware_batch_rows_read_total` | Counter | объём чтения |
 | `tradeware_batch_rows_written_total` | Counter | фактический throughput |
 | `tradeware_batch_rows_skipped_total{reason}` | Counter | качество данных / skip policy |
@@ -71,6 +75,8 @@ management:
 | `tradeware_batch_active_jobs` | Gauge | текущая concurrency |
 
 Для Spring Boot метрики экспортируются через **Micrometer/Actuator** на `/actuator/prometheus`, затем Prometheus забирает их по pull-модели.
+
+Для SLA используется низкокардинальная метка `size_class`: `le_2000`, `2001_10000`, `gt_10000`. Правило «2 000 строк ≤ 30 секунд» проверяется по `tradeware_batch_job_duration_seconds{size_class="le_2000"}`, чтобы большие отчёты не искажали среднее по целевому классу.
 
 ### 3.3. Queue / backpressure
 

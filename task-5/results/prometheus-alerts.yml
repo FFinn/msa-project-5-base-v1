@@ -16,9 +16,9 @@ groups:
 
       - alert: TradeWareBatchAverageDurationHigh
         expr: |
-          sum(rate(tradeware_batch_job_duration_seconds_sum[10m]))
+          sum(rate(tradeware_batch_job_duration_seconds_sum{size_class="le_2000"}[10m]))
           /
-          sum(rate(tradeware_batch_job_duration_seconds_count[10m]))
+          sum(rate(tradeware_batch_job_duration_seconds_count{size_class="le_2000"}[10m]))
           > 30
         for: 5m
         labels:
@@ -26,8 +26,8 @@ groups:
           service: report-batch-worker
           team: backend
         annotations:
-          summary: "Average batch processing time is above 30 seconds"
-          description: "The 10-minute rolling average job duration has been above the business target for 5 minutes."
+          summary: "Average batch processing time for files up to 2000 rows is above 30 seconds"
+          description: "The 10-minute rolling average job duration for size_class=le_2000 has been above the business target for 5 minutes."
           runbook: "task-5/results/RUNBOOKS.md#batch-sla"
 
       - alert: TradeWareQueueAgeHigh

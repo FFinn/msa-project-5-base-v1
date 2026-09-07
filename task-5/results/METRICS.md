@@ -35,7 +35,7 @@ management:
 - `tradeware_batch_jobs_started_total`;
 - `tradeware_batch_jobs_completed_total`;
 - `tradeware_batch_jobs_failed_total{error_code}`;
-- `tradeware_batch_job_duration_seconds` — Histogram;
+- `tradeware_batch_job_duration_seconds{size_class}` — Histogram;
 - `tradeware_batch_chunk_duration_seconds` — Histogram;
 - `tradeware_batch_rows_read_total`;
 - `tradeware_batch_rows_written_total`;
@@ -44,6 +44,8 @@ management:
 - `tradeware_batch_active_jobs`.
 
 Они показывают throughput, стабильность, стоимость retry и позволяют проверить бизнес-требование: средняя обработка отчёта на 2 000 строк должна укладываться в 30 секунд.
+
+Для SLA используется низкокардинальная метка `size_class` с фиксированными значениями: `le_2000`, `2001_10000`, `gt_10000`. Алерт на 30 секунд считается только для `size_class="le_2000"`, чтобы крупные файлы не искажали требование к типовым отчётам на 2 000 строк.
 
 ## Очередь и backpressure
 
