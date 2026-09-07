@@ -12,7 +12,6 @@ groups:
           summary: "Пакетное задание TradeWare завершилось ошибкой"
           description: "За последние 5 минут зафиксировано неуспешное пакетное задание после исчерпания повторных попыток."
           runbook: "RUNBOOKS.md#1-пакетное-задание-завершилось-ошибкой"
-
       - alert: TradeWareQueueAgeHigh
         expr: tradeware_queue_oldest_message_age_seconds > 120
         for: 2m
@@ -24,7 +23,6 @@ groups:
           summary: "Старое сообщение слишком долго ожидает в очереди TradeWare"
           description: "Возраст самого старого сообщения превышает 120 секунд более 2 минут."
           runbook: "RUNBOOKS.md#2-растёт-возраст-самого-старого-сообщения-в-очереди"
-
       - alert: TradeWareQueueDepthGrowing
         expr: deriv(tradeware_queue_depth[10m]) > 0
         for: 10m
@@ -35,7 +33,6 @@ groups:
         annotations:
           summary: "Очередь TradeWare устойчиво растёт"
           description: "В течение 10 минут длина очереди имеет устойчивый положительный тренд."
-
       - alert: TradeWareBatchDurationHigh
         expr: |
           rate(tradeware_batch_job_duration_seconds_sum{size_class="le_2000"}[10m])
@@ -51,7 +48,6 @@ groups:
           summary: "Типовые отчёты TradeWare обрабатываются дольше 30 секунд"
           description: "Средняя длительность обработки отчётов класса le_2000 превышает 30 секунд."
           runbook: "RUNBOOKS.md#5-время-обработки-отчёта-на-2-000-строк-превышает-30-секунд"
-
       - alert: TradeWareIntakeDown
         expr: up{job="report-intake-service"} == 0
         for: 1m
@@ -63,7 +59,6 @@ groups:
           summary: "Сервис приёма отчётов TradeWare недоступен"
           description: "Prometheus не получает метрики сервиса более 1 минуты."
           runbook: "RUNBOOKS.md#3-сервис-приёма-отчётов-недоступен"
-
       - alert: TradeWareHttp5xxHigh
         expr: |
           sum(rate(http_server_requests_seconds_count{job="report-intake-service",status=~"5.."}[5m]))
@@ -78,7 +73,6 @@ groups:
         annotations:
           summary: "Высокая доля HTTP 5xx в сервисе приёма отчётов"
           description: "Доля ответов 5xx превышает 5% в течение 5 минут."
-
       - alert: TradeWareDbPoolSaturation
         expr: tradeware_db_pool_active / tradeware_db_pool_max > 0.8
         for: 5m
@@ -90,7 +84,6 @@ groups:
           summary: "Пул соединений PostgreSQL загружен более чем на 80%"
           description: "Высокая загрузка пула соединений сохраняется не менее 5 минут."
           runbook: "RUNBOOKS.md#4-пул-соединений-postgresql-загружен-более-чем-на-80"
-
       - alert: TradeWareRetrySkipRateHigh
         expr: |
           sum(rate(tradeware_batch_retries_total[10m]))
