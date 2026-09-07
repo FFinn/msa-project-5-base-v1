@@ -1,55 +1,57 @@
-# Task 5. Мониторинг, логирование и оповещение TradeWare
+# Задание 5. Мониторинг, логирование и оповещения TradeWare
 
 ## 1. Цель
 
-После внедрения асинхронного Spring Batch ETL из Task 4 наблюдаемость должна отвечать минимум на четыре вопроса:
+После внедрения асинхронной пакетной обработки из задания 4 система наблюдаемости должна отвечать как минимум на четыре вопроса:
 
-1. **Принимает ли система загрузки?**
-2. **Успевает ли batch обрабатывать очередь с требуемой скоростью?**
-3. **Где находится bottleneck: API, worker, БД, очередь или инфраструктура?**
-4. **Почему конкретный файл/job завершился ошибкой?**
+1. **Принимает ли система новые загрузки?**
+2. **Успевает ли пакетная обработка разбирать очередь с требуемой скоростью?**
+3. **Где находится узкое место: API, обработчик, БД, очередь или инфраструктура?**
+4. **Почему конкретный файл или Job завершился ошибкой?**
 
-Для этого используется связка трёх сигналов observability:
+Используются три основных сигнала наблюдаемости:
 
-- **metrics:** Prometheus + Grafana;
-- **logs:** Filebeat → Logstash → Elasticsearch → Kibana;
-- **traces:** OpenTelemetry → Jaeger.
+- **метрики:** Prometheus + Grafana;
+- **логи:** Filebeat → Logstash → Elasticsearch → Kibana;
+- **распределённые трассировки:** OpenTelemetry → Jaeger.
 
-Оповещения: Prometheus alert rules → Alertmanager → рабочий канал команды (Telegram/Slack/email/PagerDuty — в зависимости от severity).
+Оповещения формируются Prometheus и передаются в Alertmanager, который направляет их в рабочий канал команды: Telegram, Slack, электронную почту или PagerDuty в зависимости от критичности.
 
-Архитектурная диаграмма Task 5 является расширением To Be C4 из Task 4: сохраняются Legacy Backend, Report Intake Service, Report Processing Queue, Report Batch Worker, GCS, Import Status Store, Batch Job Repository, БД справочных данных и БД номенклатуры. Observability Platform добавлена поверх этой архитектуры отдельным блоком.
+Архитектурная диаграмма задания 5 расширяет целевую C4-диаграмму из задания 4: существующие прикладные компоненты сохранены, а поверх них добавлен отдельный контур наблюдаемости.
 
-## Архитектура To Be
+## Архитектура целевого состояния
 
-![TradeWare observability architecture](c4-observability.png)
+![Архитектура наблюдаемости TradeWare](c4-observability.png)
 
-## 2. Почему одних RED-метрик недостаточно
+## 2. Почему одной методологии RED недостаточно
 
-RED (`Rate`, `Errors`, `Duration`) отлично подходит для request-driven API, но в материалах курса отдельно отмечено, что RED не является достаточной моделью для batch processing.
+RED хорошо подходит для сервисов, обрабатывающих запросы, но не описывает полностью состояние пакетной обработки.
 
-Поэтому мониторинг делится на три слоя:
+Поэтому мониторинг разделён на три слоя:
 
-1. **Online API:** RED / Four Golden Signals.
-2. **Batch pipeline:** job, queue, rows, retry, SLA/checkpoint metrics.
-3. **Resources:** USE (`Utilization`, `Saturation`, `Errors`) для JVM, pod, PostgreSQL и очереди.
+1. **API приёма отчётов:** RED и четыре золотых сигнала.
+2. **Пакетная обработка:** задания, очередь, количество строк, повторные попытки и соблюдение времени обработки.
+3. **Ресурсы:** USE — утилизация, насыщенность и ошибки для JVM, Pod, PostgreSQL и очереди.
 
 ## 3. Метрики
 
-### 3.1. API / Report Intake Service
+### 3.1. API сервиса приёма отчётов
 
 | Метрика | Тип | Назначение |
 |---|---|---|
-| `http_server_requests_seconds_count{method,uri,status}` | Counter | Rate и Errors по API |
-| `http_server_requests_seconds_sum{method,uri,status}` | Counter | суммарная длительность для average latency |
-| `http_server_requests_seconds_bucket{method,uri,status,le}` | Histogram bucket | latency/p95/p99 |
-| `tradeware_uploads_total{result}` | Counter | принятые/отклонённые загрузки |
-| `tradeware_upload_file_size_bytes` | Histogram | изменение размера входных файлов |
-| `jvm_memory_used_bytes` | Gauge | heap pressure |
-| `process_cpu_usage` | Gauge | CPU utilization |
+| `http_server_requests_seconds_count{method,uri,status}` | Counter | Частота запросов и количество ошибок |
+| `http_server_requests_seconds_sum{method,uri,status}` | Counter | Суммарная длительность для расчёта среднего времени ответа |
+| `http_server_requests_seconds_bucket{method,uri,status,le}` | Histogram bucket | Распределение длительности и расчёт p95/p99 |
+| `tradeware_uploads_total{result}` | Counter | Принятые и отклонённые загрузки |
+| `tradeware_upload_file_size_bytes` | Histogram | Размеры входных файлов |
+| `jvm_memory_used_bytes` | Gauge | Использование памяти JVM |
+| `process_cpu_usage` | Gauge | Использование CPU |
 
-**Важно:** не помещать в labels `user_id`, `file_id`, URL с динамическим id и другие high-cardinality значения. Такие идентификаторы идут в логи/traces.
+Имена типов и метрик оставлены без перевода, потому что это технические идентификаторы Prometheus.
 
-Для p95/p99 через `http_server_requests_seconds_bucket` нужно включить публикацию histogram в Micrometer:
+В метки нельзя помещать `user_id`, `file_id`, URL с динамическим идентификатором и другие значения с высокой кардинальностью. Такие идентификаторы должны попадать в логи и трассировки.
+
+Для расчёта p95/p99 через `http_server_requests_seconds_bucket` нужно включить публикацию гистограммы Micrometer:
 
 ```yaml
 management:
@@ -59,144 +61,148 @@ management:
         http.server.requests: true
 ```
 
-### 3.2. Batch Worker / Spring Batch
+### 3.2. Spring Batch
 
-| Метрика | Тип | Почему нужна |
+| Метрика | Тип | Назначение |
 |---|---|---|
-| `tradeware_batch_jobs_started_total` | Counter | интенсивность batch-нагрузки |
-| `tradeware_batch_jobs_completed_total` | Counter | успешность обработки |
-| `tradeware_batch_jobs_failed_total{error_code}` | Counter | частота и типы отказов |
-| `tradeware_batch_job_duration_seconds{size_class}` | Histogram | контроль требования 2 000 строк ≤ 30 сек и p95 |
-| `tradeware_batch_rows_read_total` | Counter | объём чтения |
-| `tradeware_batch_rows_written_total` | Counter | фактический throughput |
-| `tradeware_batch_rows_skipped_total{reason}` | Counter | качество данных / skip policy |
-| `tradeware_batch_retries_total{reason}` | Counter | нестабильность внешних зависимостей |
-| `tradeware_batch_chunk_duration_seconds` | Histogram | подбор chunk size и поиск медленных commit |
-| `tradeware_batch_active_jobs` | Gauge | текущая concurrency |
+| `tradeware_batch_jobs_started_total` | Counter | Число запущенных пакетных заданий |
+| `tradeware_batch_jobs_completed_total` | Counter | Число успешно завершённых заданий |
+| `tradeware_batch_jobs_failed_total{error_code}` | Counter | Частота и причины отказов |
+| `tradeware_batch_job_duration_seconds{size_class}` | Histogram | Контроль требования: 2 000 строк должны обрабатываться в среднем не более 30 секунд |
+| `tradeware_batch_rows_read_total` | Counter | Число прочитанных строк |
+| `tradeware_batch_rows_written_total` | Counter | Фактическая пропускная способность |
+| `tradeware_batch_rows_skipped_total{reason}` | Counter | Качество входных данных и пропуски |
+| `tradeware_batch_retries_total{reason}` | Counter | Нестабильность внешних зависимостей |
+| `tradeware_batch_chunk_duration_seconds` | Histogram | Длительность обработки одной порции данных |
+| `tradeware_batch_active_jobs` | Gauge | Текущее число выполняющихся заданий |
 
-Для Spring Boot метрики экспортируются через **Micrometer/Actuator** на `/actuator/prometheus`, затем Prometheus забирает их по pull-модели.
+Spring Boot публикует эти метрики через Micrometer/Actuator на `/actuator/prometheus`, после чего Prometheus забирает их по модели `pull`.
 
-Для SLA используется низкокардинальная метка `size_class`: `le_2000`, `2001_10000`, `gt_10000`. Правило «2 000 строк ≤ 30 секунд» проверяется по `tradeware_batch_job_duration_seconds{size_class="le_2000"}`, чтобы большие отчёты не искажали среднее по целевому классу.
+Для проверки требования на 30 секунд используется низкокардинальная метка `size_class`: `le_2000`, `2001_10000`, `gt_10000`. Класс `le_2000` отделён специально, чтобы крупные отчёты не искажали показатель для типового файла на 2 000 строк.
 
-### 3.3. Queue / backpressure
+### 3.3. Очередь обработки
 
-| Метрика | Тип | Почему нужна |
+| Метрика | Тип | Назначение |
 |---|---|---|
-| `tradeware_queue_depth` | Gauge | backlog, главный индикатор насыщения batch |
-| `tradeware_queue_oldest_message_age_seconds` | Gauge | показывает, сколько реально ждёт самый старый файл |
-| `tradeware_queue_consumption_rate` | Gauge/derived | успевают ли workers разгребать поток |
-| `tradeware_queue_publish_errors_total` | Counter | ошибки Intake → Queue |
+| `tradeware_queue_depth` | Gauge | Количество ожидающих сообщений |
+| `tradeware_queue_oldest_message_age_seconds` | Gauge | Возраст самого старого сообщения |
+| `tradeware_queue_consumption_rate` | Gauge/derived | Скорость обработки очереди |
+| `tradeware_queue_publish_errors_total` | Counter | Ошибки публикации сообщений |
 
-Для burst 100–150 загрузок именно queue depth и oldest age важнее простого CPU: CPU может быть нормальным, пока очередь уже нарушает SLA.
+При всплеске до 100–150 загрузок очередь важнее одной только загрузки CPU: процессор может быть свободен, но сообщения уже могут ждать слишком долго.
 
 ### 3.4. PostgreSQL
 
-- active connections / max connections;
-- connection pool utilization;
-- transaction rate;
-- query duration;
-- lock wait / deadlocks;
-- disk I/O saturation;
-- errors/timeouts.
+Нужно собирать:
 
-Критично видеть DB saturation, потому что горизонтальное увеличение batch workers без лимита способно ухудшить производительность.
+- число активных соединений и максимально допустимое число;
+- загрузку пула соединений;
+- частоту транзакций;
+- длительность запросов;
+- ожидания блокировок и взаимоблокировки;
+- насыщенность дискового ввода-вывода;
+- ошибки и тайм-ауты.
 
-### 3.5. Kubernetes / JVM
+Это важно, потому что неконтролируемое увеличение числа обработчиков способно перегрузить БД и ухудшить общую производительность.
 
-USE-набор:
+### 3.5. Kubernetes и JVM
 
-- CPU utilization;
-- memory working set / heap;
-- memory limit и OOMKilled;
-- pod restarts;
-- throttling CPU;
-- pending pods;
-- filesystem/volume errors;
-- worker saturation (active jobs / configured concurrency).
+Набор по подходу USE:
 
-## 4. Grafana dashboard
+- загрузка CPU;
+- использование памяти и кучи JVM;
+- `OOMKilled`;
+- перезапуски Pod;
+- ограничение CPU;
+- Pod, ожидающие размещения;
+- ошибки файловой системы и томов;
+- отношение активных заданий к разрешённому числу параллельных обработчиков.
 
-Один верхнеуровневый dashboard `TradeWare Batch Overview`:
+## 4. Панель мониторинга Grafana
 
-1. Upload rate и HTTP error rate.
-2. API p95 latency.
-3. Queue depth + oldest message age.
-4. Active batch jobs.
-5. Jobs completed/failed per minute.
-6. Average/p95 batch duration.
-7. Rows written/sec.
-8. Retry/skip rate.
-9. DB connections/locks/query latency.
-10. CPU/RAM/pod restarts.
+Основная панель `TradeWare Batch Overview` должна показывать:
 
-Переменные Grafana: `environment`, `service`, `namespace`, `pod`. Не использовать `file_id` как dashboard variable из Prometheus из-за cardinality — конкретный файл ищется в Kibana/Jaeger.
+1. частоту загрузок и долю HTTP-ошибок;
+2. p95 времени ответа API;
+3. длину очереди и возраст самого старого сообщения;
+4. число активных пакетных заданий;
+5. число успешно и неуспешно завершённых заданий;
+6. среднее значение и p95 времени пакетной обработки;
+7. число записанных строк в секунду;
+8. долю повторных попыток и пропущенных строк;
+9. соединения, блокировки и длительность запросов PostgreSQL;
+10. CPU, память и перезапуски Pod.
 
-Аннотации Grafana: deploy/release markers, чтобы сопоставлять деградацию с релизами.
+Переменные Grafana: `environment`, `service`, `namespace`, `pod`. `file_id` нельзя использовать как переменную Prometheus из-за высокой кардинальности — конкретный файл ищется через Kibana и Jaeger.
 
-## 5. Alerting
+На графики стоит добавить аннотации о развёртываниях новых версий, чтобы можно было сопоставлять деградацию с изменениями системы.
 
-Alertmanager группирует алерты по `alertname`, `service`, `environment`, использует `for`, чтобы отсечь короткие всплески, и отправляет `resolved` уведомления.
+## 5. Оповещения
 
-Предварительные правила должны быть подтверждены нагрузочным тестом.
+Alertmanager группирует оповещения по `alertname`, `service`, `environment`, использует параметр `for` для отсечения кратковременных всплесков и отправляет уведомление о восстановлении.
 
-### Critical
+Начальные пороги нужно подтвердить нагрузочным тестированием.
 
-- batch job завершился `FAILED` после исчерпания retry;
-- очередь перестала обрабатываться и oldest message age превышает допустимое окно;
-- Intake API недоступен;
+### Критические оповещения
+
+- пакетное задание завершилось со статусом `FAILED` после исчерпания повторных попыток;
+- очередь перестала нормально обрабатываться, а возраст самого старого сообщения превысил допустимое значение;
+- сервис приёма отчётов недоступен;
 - PostgreSQL недоступен;
-- OOMKilled batch worker.
+- обработчик пакетных заданий завершён с `OOMKilled`.
 
-### Warning
+### Предупреждения
 
-- среднее время batch report около/выше 30 секунд на устойчивом окне;
-- p95 API latency выше согласованного SLO;
-- DB connection pool > 80%;
-- queue depth устойчиво растёт;
-- retry/skip rate вырос относительно baseline.
+- среднее время обработки типового отчёта устойчиво приблизилось к 30 секундам или превысило их;
+- p95 времени ответа API выше согласованного SLO;
+- пул соединений БД загружен более чем на 80%;
+- длина очереди устойчиво растёт;
+- выросла доля повторных попыток или пропущенных строк.
 
 Пример правил находится в `prometheus-alerts.yml`.
 
-Каждый production alert должен содержать:
+Каждое промышленное оповещение должно содержать:
 
 - `severity`;
 - `service`;
 - `team`;
-- `environment` — добавляется через `external_labels` конкретного Prometheus instance, чтобы один и тот же файл правил работал в dev/test/prod;
-- `summary`;
-- `description`;
-- ссылку на `runbook`;
-- ссылку на dashboard/query при возможности.
+- `environment`;
+- краткое описание проблемы;
+- подробное описание;
+- ссылку на инструкцию по устранению инцидента;
+- по возможности ссылку на панель или запрос.
+
+`environment` добавляется через `external_labels` конкретного экземпляра Prometheus, поэтому один набор правил можно применять в dev/test/prod.
 
 ## 6. Логирование: выбран ELK
 
-### Поток
+### Поток логов
 
 ```text
-Application stdout JSON
-        |
-Filebeat (DaemonSet / agent)
-        |
-Logstash (parse/enrich/filter)
-        |
+Приложения → stdout в JSON
+        ↓
+Filebeat
+        ↓
+Logstash
+        ↓
 Elasticsearch
-        |
-Kibana Discover / Dashboard
+        ↓
+Kibana
 ```
 
 Почему ELK:
 
-- централизует логи monolith + новых сервисов + batch workers;
-- Elasticsearch оптимизирован под поиск документов и полей;
-- Kibana позволяет быстро фильтровать события одного `file_id`/`job_execution_id`;
-- Logstash позволяет нормализовать старые WildFly-логи и новые JSON logs в общую схему;
-- Filebeat подходит как лёгкий агент доставки контейнерных/файловых логов.
+- объединяет логи существующего монолита и новых сервисов;
+- Elasticsearch оптимизирован для индексированного поиска по документам и полям;
+- Kibana позволяет быстро найти события одного `file_id` или `job_execution_id`;
+- Logstash нормализует старые логи WildFly и новые JSON-логи;
+- Filebeat подходит как лёгкий агент доставки контейнерных и файловых логов.
 
-Если из-за лицензирования/корпоративного стандарта Elastic неприемлем, архитектурно близкой альтернативой является OpenSearch + OpenSearch Dashboards.
+Если стек Elastic нельзя использовать из-за лицензирования или корпоративного стандарта, близкой альтернативой будет OpenSearch + OpenSearch Dashboards.
 
-### Формат application log
+### Формат лога приложения
 
-Новые сервисы должны писать структурированный JSON в stdout/stderr:
+Новые сервисы должны писать структурированный JSON в `stdout/stderr`:
 
 ```json
 {
@@ -216,84 +222,80 @@ Kibana Discover / Dashboard
 }
 ```
 
-Для ошибки дополнительно:
+Названия полей — часть машинного формата и поэтому не переводятся.
 
-- `error_code` — стабильный машинный код;
-- `exception_class`;
-- `message`;
-- stacktrace (ERROR);
-- retry attempt.
+Для ошибки дополнительно передаются `error_code`, `exception_class`, `message`, трассировка стека и номер повторной попытки.
 
 ### Что нельзя логировать
 
-- пароли, access/refresh tokens;
-- строки подключения с credentials;
-- полные банковские/платёжные реквизиты;
+- пароли и токены;
+- строки подключения с учётными данными;
+- полные платёжные реквизиты;
 - лишние персональные данные;
 - полное содержимое загружаемого файла.
 
-Вместо содержимого — `file_id`, checksum, row number и технический error code.
+Вместо содержимого используются `file_id`, контрольная сумма, номер строки и технический `error_code`.
 
-### Уровни
+### Уровни логирования
 
-- `INFO` — job/step start/complete, итоговые counts;
-- `WARN` — recoverable anomaly, retry, допустимый skip;
-- `ERROR` — job/step failure и неисправимые ошибки;
-- `DEBUG/TRACE` — временно для диагностики, постоянно на production не включать.
+- `INFO` — начало и завершение Job/Step, итоговые счётчики;
+- `WARN` — восстанавливаемая аномалия, повторная попытка, допустимый пропуск;
+- `ERROR` — неисправимая ошибка Job/Step;
+- `DEBUG`/`TRACE` — временно для диагностики, постоянно в промышленной среде не включаются.
 
-## 7. Elasticsearch indices и retention
+## 7. Elasticsearch и жизненный цикл индексов
 
-Использовать статический mapping, а не бесконтрольный dynamic mapping.
+Следует использовать явное сопоставление полей, а не бесконтрольное динамическое создание.
 
-Пример паттернов:
+Примеры шаблонов индексов:
 
 - `tradeware-app-logs-*`;
 - `tradeware-audit-*`.
 
-Ключевые keyword fields: `service`, `environment`, `level`, `event`, `error_code`, `file_id`, `trace_id`.
+Поля `service`, `environment`, `level`, `event`, `error_code`, `file_id`, `trace_id` хранятся как `keyword`.
 
-`message`/stacktrace — text; `duration_ms`, counts — numeric; `@timestamp` — date.
+`message` и трассировка стека — `text`; `duration_ms` и счётчики — числовые поля; `@timestamp` — `date`.
 
-Использовать **ILM**:
+Для управления сроком жизни индексов используется **ILM**:
 
-1. hot — свежие логи для расследований;
-2. rollover по age/size/shard size;
-3. warm/cold при необходимости;
-4. delete после согласованного retention.
+1. горячая стадия — свежие логи для оперативных расследований;
+2. ролловер по возрасту, размеру или размеру шарда;
+3. тёплая и холодная стадии при необходимости;
+4. удаление после согласованного срока хранения.
 
-Обычные технические логи можно хранить, например, 30 дней, audit/security — согласно требованиям ИБ/законодательства. Конкретные сроки должны быть утверждены владельцем данных и ИБ.
+Обычные технические логи можно хранить, например, 30 дней. Аудитные журналы и журналы безопасности хранятся по требованиям ИБ и законодательства.
 
-## 8. Distributed tracing
+## 8. Распределённая трассировка
 
-OpenTelemetry SDK добавляется в Intake Service и Batch Worker.
+OpenTelemetry SDK добавляется в сервис приёма отчётов и обработчик Spring Batch.
 
-- один `trace_id` связывает входную загрузку, сохранение в GCS, публикацию команды и batch execution;
-- `span_id` — отдельные операции;
-- context propagation передаётся через HTTP и message headers;
-- Jaeger визуализирует цепочку и длительность spans.
+- один `trace_id` связывает входную загрузку, сохранение в Google Cloud Storage, публикацию сообщения и пакетное выполнение;
+- `span_id` относится к отдельной операции;
+- контекст передаётся через HTTP-заголовки и заголовки сообщения;
+- Jaeger показывает цепочку вызовов и длительность отдельных спанов.
 
-Это позволяет из Kibana по `trace_id` перейти к конкретному trace и увидеть, например, что задержка была не в обработке CSV, а в DB writer.
+Это позволяет по `trace_id` перейти от события в Kibana к конкретной трассировке и увидеть, где именно появилась задержка.
 
-## 9. Корреляция трёх сигналов
+## 9. Как расследуется инцидент
 
-Типовой incident flow:
+Пример:
 
-1. Alertmanager: `TradeWareQueueAgeHigh`.
-2. Grafana: видим рост queue age и DB pool saturation.
-3. Kibana: фильтр `service=report-batch-worker AND level=ERROR/WARN`.
-4. По `trace_id` открываем Jaeger.
-5. Видим медленный span JDBC/lock wait.
-6. После исправления проверяем метрики и `resolved` alert.
+1. Alertmanager сообщает, что возраст сообщений в очереди превысил порог.
+2. В Grafana видно одновременное увеличение времени ожидания и загрузки пула соединений БД.
+3. В Kibana инженер фильтрует `service=report-batch-worker AND level=ERROR/WARN`.
+4. По `trace_id` открывает трассировку в Jaeger.
+5. В трассировке виден медленный JDBC-вызов или ожидание блокировки.
+6. После исправления инженер проверяет восстановление метрик и закрытие оповещения.
 
-Так metrics обнаруживают проблему, logs объясняют детали, traces показывают путь запроса/операции.
+Так метрики обнаруживают проблему, логи объясняют контекст, а трассировки показывают путь операции.
 
-## 10. Связь с учебными практиками
+## 10. Связь с материалами курса
 
-В качестве практических ориентиров для локального POC применимы репозитории из уроков:
+Для локальных экспериментов можно использовать репозитории из уроков:
 
 - `db-exp/monitoring-alerting` — Prometheus + Alertmanager + уведомления;
-- `db-exp/elka` — ELK/Filebeat/Logstash pipeline.
+- `db-exp/elka` — ELK, Filebeat и Logstash.
 
-В production секреты из примеров нельзя хранить в репозитории: токены/credentials должны поступать из Secret Manager/Kubernetes Secret.
+В промышленной среде токены и учётные данные из примеров нельзя хранить в репозитории. Они должны поступать из Secret Manager или Kubernetes Secret.
 
-Исходники архитектурной диаграммы: `c4-observability.puml` и `c4-observability.drawio`; экспорт для просмотра: `c4-observability.png`.
+Исходники архитектурной диаграммы: `c4-observability.puml` и `c4-observability.drawio`; PNG используется для просмотра в репозитории.
