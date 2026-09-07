@@ -3,22 +3,22 @@
 
 LAYOUT_LEFT_RIGHT()
 
-title Task 2 — C4 Container To Be: ежедневная выгрузка B2B-прайс-листов
+title Задание 2 — C4: контейнерная диаграмма целевого состояния
 
 Person(b2b, "B2B-клиент", "Получает сформированный прайс-лист")
 
 System_Ext(shop, "Онлайн-магазин", "Источник актуальных данных")
 ContainerDb_Ext(priceDb, "БД прайс-листов", "PostgreSQL", "products, categories, clients, client_prices")
-System_Ext(objectStorage, "Объектное хранилище", "GCS/S3-compatible", "Хранит сформированные CSV/XLS-файлы")
+System_Ext(objectStorage, "Объектное хранилище", "Google Cloud Storage / S3-совместимое", "Хранит сформированные CSV/XLS-файлы")
 
 System_Boundary(priceListSystem, "Модуль формирования B2B-прайс-листов") {
-    Container(exporter, "Price List Exporter", "Container, Kubernetes CronJob → Job → Pod", "В 06:00 читает данные, формирует отдельные CSV/XLS для клиентов и публикует их атомарно")
+    Container(exporter, "Приложение экспорта прайс-листов", "Контейнер, Kubernetes CronJob → Job → Pod", "В 06:00 читает данные, формирует отдельные CSV/XLS для клиентов и публикует их после полного успешного формирования")
 }
 
 Rel(shop, priceDb, "Хранит и обновляет данные", "PostgreSQL")
-Rel(exporter, priceDb, "Читает данные потоковым SQL/JOIN", "PostgreSQL, read-only")
+Rel(exporter, priceDb, "Читает данные потоковым SQL-запросом с JOIN", "PostgreSQL, только чтение")
 Rel(exporter, objectStorage, "Публикует готовые файлы", "CSV/XLS")
-Rel(b2b, objectStorage, "Скачивает свой прайс-лист", "download / signed URL")
+Rel(b2b, objectStorage, "Скачивает свой прайс-лист", "ссылка / подписанная ссылка")
 
 SHOW_LEGEND()
 @enduml
