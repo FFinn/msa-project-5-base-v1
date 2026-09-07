@@ -1,6 +1,5 @@
 groups:
-  # Label environment is injected by Prometheus external_labels for each environment.
-  - name: tradeware-batch
+  - name: tradeware
     rules:
       - alert: TradeWareBatchJobFailed
         expr: increase(tradeware_batch_jobs_failed_total[5m]) > 0
@@ -10,37 +9,21 @@ groups:
           service: report-batch-worker
           team: backend
         annotations:
-          summary: "Spring Batch job failed"
-          description: "At least one batch job failed after retries during the last 5 minutes."
-          runbook: "task-5/results/RUNBOOKS.md#batch-job-failed"
-
-      - alert: TradeWareBatchAverageDurationHigh
-        expr: |
-          sum(rate(tradeware_batch_job_duration_seconds_sum{size_class="le_2000"}[10m]))
-          /
-          sum(rate(tradeware_batch_job_duration_seconds_count{size_class="le_2000"}[10m]))
-          > 30
-        for: 5m
-        labels:
-          severity: warning
-          service: report-batch-worker
-          team: backend
-        annotations:
-          summary: "Average batch processing time for files up to 2000 rows is above 30 seconds"
-          description: "The 10-minute rolling average job duration for size_class=le_2000 has been above the business target for 5 minutes."
-          runbook: "task-5/results/RUNBOOKS.md#batch-sla"
+          summary: "Пакетное задание TradeWare завершилось ошибкой"
+          description: "За последние 5 минут зафиксировано неуспешное пакетное задание после исчерпания повторных попыток."
+          runbook: "RUNBOOKS.md#1-пакетное-задание-завершилось-ошибкой"
 
       - alert: TradeWareQueueAgeHigh
-        expr: tradeware_queue_oldest_message_age_seconds > 60
-        for: 5m
+        expr: tradeware_queue_oldest_message_age_seconds > 120
+        for: 2m
         labels:
           severity: critical
           service: report-processing-queue
           team: backend
         annotations:
-          summary: "Oldest report has been waiting in queue for too long"
-          description: "Oldest message age is {{ $value }} seconds. Threshold must be tuned after load tests."
-          runbook: "task-5/results/RUNBOOKS.md#queue-backlog"
+          summary: "Старое сообщение слишком долго ожидает в очереди TradeWare"
+          description: "Возраст самого старого сообщения превышает 120 секунд более 2 минут."
+          runbook: "RUNBOOKS.md#2-растёт-возраст-самого-старого-сообщения-в-очереди"
 
       - alert: TradeWareQueueDepthGrowing
         expr: deriv(tradeware_queue_depth[10m]) > 0
@@ -50,41 +33,26 @@ groups:
           service: report-processing-queue
           team: backend
         annotations:
-          summary: "Report processing backlog is continuously growing"
-          description: "Queue depth has had a positive trend for 10 minutes."
-          runbook: "task-5/results/RUNBOOKS.md#queue-backlog"
+          summary: "Очередь TradeWare устойчиво растёт"
+          description: "В течение 10 минут длина очереди имеет устойчивый положительный тренд."
 
-      - alert: TradeWareDbPoolSaturationHigh
-        expr: tradeware_db_pool_active_connections / tradeware_db_pool_max_connections > 0.8
-        for: 5m
-        labels:
-          severity: warning
-          service: postgresql
-          team: backend
-        annotations:
-          summary: "Database connection pool saturation above 80%"
-          description: "Worker concurrency may be too high or DB queries may be slow."
-          runbook: "task-5/results/RUNBOOKS.md#db-saturation"
-
-      - alert: TradeWareHighSkipRate
+      - alert: TradeWareBatchDurationHigh
         expr: |
-          sum(rate(tradeware_batch_rows_skipped_total[10m]))
+          rate(tradeware_batch_job_duration_seconds_sum{size_class="le_2000"}[10m])
           /
-          sum(rate(tradeware_batch_rows_read_total[10m]))
-          > 0.01
-        for: 10m
+          rate(tradeware_batch_job_duration_seconds_count{size_class="le_2000"}[10m])
+          > 30
+        for: 5m
         labels:
           severity: warning
           service: report-batch-worker
           team: backend
         annotations:
-          summary: "Skipped rows exceed 1%"
-          description: "Potential input-data-quality regression. Threshold must be approved by business/data owner."
-          runbook: "task-5/results/RUNBOOKS.md#data-quality--high-skip-rate"
+          summary: "Типовые отчёты TradeWare обрабатываются дольше 30 секунд"
+          description: "Средняя длительность обработки отчётов класса le_2000 превышает 30 секунд."
+          runbook: "RUNBOOKS.md#5-время-обработки-отчёта-на-2-000-строк-превышает-30-секунд"
 
-  - name: tradeware-api
-    rules:
-      - alert: TradeWareIntakeApiDown
+      - alert: TradeWareIntakeDown
         expr: up{job="report-intake-service"} == 0
         for: 1m
         labels:
@@ -92,11 +60,11 @@ groups:
           service: report-intake-service
           team: backend
         annotations:
-          summary: "Report Intake API is unavailable"
-          description: "Prometheus has been unable to scrape the Intake API for more than one minute."
-          runbook: "task-5/results/RUNBOOKS.md#intake-api-down"
+          summary: "Сервис приёма отчётов TradeWare недоступен"
+          description: "Prometheus не получает метрики сервиса более 1 минуты."
+          runbook: "RUNBOOKS.md#3-сервис-приёма-отчётов-недоступен"
 
-      - alert: TradeWareIntakeHigh5xxRate
+      - alert: TradeWareHttp5xxHigh
         expr: |
           sum(rate(http_server_requests_seconds_count{job="report-intake-service",status=~"5.."}[5m]))
           /
@@ -108,6 +76,31 @@ groups:
           service: report-intake-service
           team: backend
         annotations:
-          summary: "Report Intake API 5xx rate above 5%"
-          description: "Server error ratio has been above 5% for 5 minutes."
-          runbook: "task-5/results/RUNBOOKS.md#intake-api-high-5xx-rate"
+          summary: "Высокая доля HTTP 5xx в сервисе приёма отчётов"
+          description: "Доля ответов 5xx превышает 5% в течение 5 минут."
+
+      - alert: TradeWareDbPoolSaturation
+        expr: tradeware_db_pool_active / tradeware_db_pool_max > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+          team: backend
+        annotations:
+          summary: "Пул соединений PostgreSQL загружен более чем на 80%"
+          description: "Высокая загрузка пула соединений сохраняется не менее 5 минут."
+          runbook: "RUNBOOKS.md#4-пул-соединений-postgresql-загружен-более-чем-на-80"
+
+      - alert: TradeWareRetrySkipRateHigh
+        expr: |
+          sum(rate(tradeware_batch_retries_total[10m]))
+          + sum(rate(tradeware_batch_rows_skipped_total[10m]))
+          > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: report-batch-worker
+          team: backend
+        annotations:
+          summary: "В TradeWare выросло число повторных попыток или пропущенных строк"
+          description: "Суммарная скорость повторных попыток и пропусков превышает рабочий порог. Порог требуется откалибровать нагрузочным тестированием."
